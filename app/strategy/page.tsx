@@ -1,6 +1,7 @@
 "use client";
 
 // Interactive strategy workspace.
+import Link from "next/link";
 import { FormEvent, useMemo, useState } from "react";
 
 type View = "Overview" | "X-matrix" | "Initiatives" | "Reviews";
@@ -97,6 +98,9 @@ export default function Home() {
           <button className="nav-item active" type="button">
             <span className="nav-icon">◫</span> Strategy
           </button>
+          <Link className="nav-item" href="/quality">
+            <span className="nav-icon">◇</span> Quality events
+          </Link>
           <button className="nav-item" type="button">
             <span className="nav-icon">◎</span> Scorecards
           </button>
