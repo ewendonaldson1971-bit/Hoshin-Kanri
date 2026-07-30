@@ -52,6 +52,9 @@ button { cursor: pointer; }
   font: 700 24px/1 "Cabin", sans-serif;
   letter-spacing: -0.5px;
 }
+.vivad-logo { display: block; width: 146px; height: auto; object-fit: contain; }
+.strategy-vivad-logo { width: 142px; }
+.footer-vivad-logo { width: 132px; }
 .brand-mark { width: 30px; height: 30px; display: flex; align-items: flex-end; gap: 3px; transform: skew(-12deg); }
 .brand-mark i { display: block; width: 7px; border-radius: 2px 2px 1px 1px; background: var(--red); }
 .brand-mark i:nth-child(1) { height: 13px; }
@@ -317,7 +320,8 @@ select:focus, input:focus { border-color: var(--blue); box-shadow: 0 0 0 3px rgb
 @media (max-width: 900px) {
   .sidebar { width: 76px; }
   .brand { justify-content: center; padding: 0; }
-  .brand > span:last-child, .nav-label, .nav-item:not(.active), .nav-item.active:not(:first-of-type), .sidebar-footer { display: none; }
+  .nav-label, .nav-item:not(.active), .nav-item.active:not(:first-of-type), .sidebar-footer { display: none; }
+  .strategy-vivad-logo { width: 54px; object-position: left; clip-path: inset(0 72% 0 0); }
   .side-nav { padding: 14px 10px; }
   .nav-item.active { justify-content: center; padding: 0; }
   .nav-icon { font-size: 20px; }

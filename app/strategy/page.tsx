@@ -88,9 +88,8 @@ export default function Home() {
   return (
     <div className="app-shell">
       <aside className="sidebar">
-        <a className="brand" href="#top" aria-label="Hoshin home">
-          <span className="brand-mark"><i /><i /><i /></span>
-          <span>hoshin</span>
+        <a className="brand" href="#top" aria-label="Vivad strategy workspace">
+          <img className="vivad-logo strategy-vivad-logo" src="/vivad-logo.png" alt="Vivad" />
         </a>
 
         <nav className="side-nav" aria-label="Workspace navigation">
