@@ -13,6 +13,30 @@ type Course = {
   owner: string;
   accent: "blue" | "green" | "red" | "amber";
   videoUid: string;
+  thumbnail?: string;
+  ready?: boolean;
+  requiresSignedUrls?: boolean;
+};
+
+type StreamLibraryResponse = {
+  connected: boolean;
+  streamHost?: string;
+  refreshedAt?: string;
+  error?: string;
+  missing?: string[];
+  videos: Array<{
+    id: string;
+    videoUid: string;
+    title: string;
+    description: string;
+    category: string;
+    level: string;
+    owner: string;
+    durationSeconds: number;
+    thumbnail: string;
+    ready: boolean;
+    requiresSignedUrls: boolean;
+  }>;
 };
 
 type StreamConfig = {
@@ -102,12 +126,28 @@ const courses: Course[] = [
 const configKey = "vivad-stream-training-config";
 const progressKey = "vivad-stream-training-progress";
 
+function formatDuration(seconds: number) {
+  if (!seconds) return "Duration pending";
+  const minutes = Math.max(1, Math.round(seconds / 60));
+  return `${minutes} min`;
+}
+
+function manualStreamHost(customerCode: string) {
+  const cleaned = customerCode.replace(/^https?:\/\//i, "").replace(/\/.*$/, "");
+  if (!cleaned) return "";
+  if (cleaned.endsWith(".cloudflarestream.com")) return cleaned;
+  if (cleaned.startsWith("customer-")) return `${cleaned}.cloudflarestream.com`;
+  return `customer-${cleaned}.cloudflarestream.com`;
+}
+
 export default function TrainingPage() {
   const [activeId, setActiveId] = useState(courses[0].id);
   const [query, setQuery] = useState("");
   const [category, setCategory] = useState("All topics");
   const [completed, setCompleted] = useState<string[]>([]);
   const [configOpen, setConfigOpen] = useState(false);
+  const [library, setLibrary] = useState<StreamLibraryResponse>({ connected: false, videos: [] });
+  const [libraryLoading, setLibraryLoading] = useState(true);
   const [config, setConfig] = useState<StreamConfig>({
     customerCode: process.env.NEXT_PUBLIC_CLOUDFLARE_STREAM_CUSTOMER_CODE ?? "",
     videoIds: Object.fromEntries(courses.map((course) => [course.id, course.videoUid])),
@@ -141,14 +181,52 @@ export default function TrainingPage() {
     }
   }, []);
 
+  useEffect(() => {
+    let active = true;
+    async function loadLibrary() {
+      try {
+        const response = await fetch("/api/training/videos", { cache: "no-store" });
+        const payload = (await response.json()) as StreamLibraryResponse;
+        if (!active) return;
+        setLibrary(payload);
+        if (payload.connected && payload.videos.length) setActiveId(payload.videos[0].id);
+      } catch {
+        if (active) setLibrary({ connected: false, videos: [], error: "The Stream library could not be reached." });
+      } finally {
+        if (active) setLibraryLoading(false);
+      }
+    }
+    void loadLibrary();
+    return () => { active = false; };
+  }, []);
+
+  const libraryCourses = useMemo<Course[]>(() => {
+    if (!library.connected || !library.videos.length) return courses;
+    const accents: Course["accent"][] = ["blue", "green", "red", "amber"];
+    return library.videos.map((video, index) => ({
+      id: video.id,
+      title: video.title,
+      description: video.description,
+      category: video.category,
+      duration: formatDuration(video.durationSeconds),
+      level: video.level,
+      owner: video.owner,
+      accent: accents[index % accents.length],
+      videoUid: video.videoUid,
+      thumbnail: video.thumbnail,
+      ready: video.ready,
+      requiresSignedUrls: video.requiresSignedUrls,
+    }));
+  }, [library]);
+
   const categories = useMemo(
-    () => ["All topics", ...Array.from(new Set(courses.map((course) => course.category)))],
-    [],
+    () => ["All topics", ...Array.from(new Set(libraryCourses.map((course) => course.category)))],
+    [libraryCourses],
   );
 
   const filteredCourses = useMemo(() => {
     const needle = query.trim().toLowerCase();
-    return courses.filter((course) => {
+    return libraryCourses.filter((course) => {
       const matchesCategory = category === "All topics" || course.category === category;
       const matchesQuery =
         !needle ||
@@ -158,12 +236,15 @@ export default function TrainingPage() {
           .includes(needle);
       return matchesCategory && matchesQuery;
     });
-  }, [category, query]);
+  }, [category, libraryCourses, query]);
 
-  const activeCourse = courses.find((course) => course.id === activeId) ?? courses[0];
-  const activeUid = config.videoIds[activeCourse.id] || activeCourse.videoUid;
-  const isConnected = Boolean(config.customerCode.trim() && activeUid?.trim());
-  const completionRate = Math.round((completed.length / courses.length) * 100);
+  const activeCourse = libraryCourses.find((course) => course.id === activeId) ?? libraryCourses[0];
+  const activeUid = activeCourse.videoUid || config.videoIds[activeCourse.id];
+  const streamHost = library.streamHost || manualStreamHost(config.customerCode);
+  const isProtected = Boolean(activeCourse.requiresSignedUrls);
+  const isReady = activeCourse.ready !== false;
+  const isConnected = Boolean(streamHost && activeUid?.trim() && isReady && !isProtected);
+  const completionRate = libraryCourses.length ? Math.round((completed.filter((id) => libraryCourses.some((course) => course.id === id)).length / libraryCourses.length) * 100) : 0;
 
   function markComplete(courseId: string) {
     setCompleted((current) => {
@@ -217,7 +298,7 @@ export default function TrainingPage() {
         <div className="training-progress-card">
           <div><span>YOUR PROGRESS</span><strong>{completionRate}%</strong></div>
           <div className="training-progress-track"><i style={{ width: `${completionRate}%` }} /></div>
-          <small>{completed.length} of {courses.length} modules complete</small>
+          <small>{completed.filter((id) => libraryCourses.some((course) => course.id === id)).length} of {libraryCourses.length} modules complete</small>
         </div>
       </aside>
 
@@ -229,8 +310,8 @@ export default function TrainingPage() {
             <p>Short, practical learning that connects quality, problem solving, and strategy to the work.</p>
           </div>
           <button className="stream-config-button" type="button" onClick={() => setConfigOpen(true)}>
-            <span className={config.customerCode ? "connected" : ""} />
-            {config.customerCode ? "Stream connected" : "Configure Stream"}
+            <span className={library.connected || config.customerCode ? "connected" : ""} />
+            {libraryLoading ? "Checking Stream…" : library.connected ? `${library.videos.length} Stream videos` : config.customerCode ? "Stream connected" : "Configure Stream"}
           </button>
         </header>
 
@@ -238,9 +319,9 @@ export default function TrainingPage() {
           <div className="training-player">
             {isConnected ? (
               <iframe
-                key={`${config.customerCode}-${activeUid}`}
+                key={`${streamHost}-${activeUid}`}
                 ref={playerRef}
-                src={`https://customer-${config.customerCode}.cloudflarestream.com/${activeUid}/iframe?primaryColor=%23478FE1&letterboxColor=%2353565A&preload=metadata`}
+                src={`https://${streamHost}/${activeUid}/iframe?primaryColor=%23478FE1&letterboxColor=%2353565A&preload=metadata`}
                 title={activeCourse.title}
                 allow="accelerometer; gyroscope; autoplay; encrypted-media; picture-in-picture"
                 allowFullScreen
@@ -249,9 +330,9 @@ export default function TrainingPage() {
             ) : (
               <div className="training-player-empty">
                 <span className="stream-mark"><i /><i /><i /></span>
-                <strong>Connect this module to Cloudflare Stream</strong>
-                <p>Add your customer code and this video’s UID to start adaptive, secure playback.</p>
-                <button type="button" onClick={() => setConfigOpen(true)}>Add Stream video</button>
+                <strong>{isProtected ? "Protected Stream video" : !isReady ? "Video is still processing" : "Connect this module to Cloudflare Stream"}</strong>
+                <p>{isProtected ? "This video requires a signed playback token. Add user authentication before enabling secure viewing on the public Netlify deployment." : !isReady ? "Cloudflare is encoding this video. It will become playable here automatically when processing is complete." : "Add your customer subdomain and this video’s UID to start adaptive playback."}</p>
+                {!isProtected && isReady && <button type="button" onClick={() => setConfigOpen(true)}>Add Stream video</button>}
               </div>
             )}
           </div>
@@ -281,14 +362,14 @@ export default function TrainingPage() {
           </div>
           <div className="training-grid">
             {filteredCourses.map((course, index) => {
-              const connected = Boolean(config.customerCode && (config.videoIds[course.id] || course.videoUid));
+              const connected = Boolean(streamHost && (config.videoIds[course.id] || course.videoUid) && course.ready !== false && !course.requiresSignedUrls);
               const done = completed.includes(course.id);
               return (
                 <article className={activeId === course.id ? "training-card active" : "training-card"} key={course.id}>
-                  <button className={`training-card-visual ${course.accent}`} type="button" onClick={() => { setActiveId(course.id); window.scrollTo({ top: 0, behavior: "smooth" }); }} aria-label={`Open ${course.title}`}>
+                  <button className={`training-card-visual ${course.accent} ${course.thumbnail ? "has-thumbnail" : ""}`} style={course.thumbnail ? { backgroundImage: `linear-gradient(rgba(26,30,35,.12), rgba(26,30,35,.42)), url(${course.thumbnail})` } : undefined} type="button" onClick={() => { setActiveId(course.id); window.scrollTo({ top: 0, behavior: "smooth" }); }} aria-label={`Open ${course.title}`}>
                     <span className="training-card-number">{String(index + 1).padStart(2, "0")}</span>
                     <span className="training-play">▶</span>
-                    <span className={connected ? "stream-state connected" : "stream-state"}>{connected ? "STREAM READY" : "ADD VIDEO"}</span>
+                    <span className={connected ? "stream-state connected" : "stream-state"}>{course.requiresSignedUrls ? "SIGNED / LOCKED" : course.ready === false ? "PROCESSING" : connected ? "STREAM READY" : "ADD VIDEO"}</span>
                   </button>
                   <div className="training-card-body">
                     <div><span>{course.category}</span><span>{course.duration}</span></div>

@@ -1072,6 +1072,7 @@ select:focus, input:focus { border-color: var(--blue); box-shadow: 0 0 0 3px rgb
 .training-card-visual.red { background: linear-gradient(135deg, #ffdce3, #ee607b); }
 .training-card-visual.green { background: linear-gradient(135deg, #e2f2cd, #8ec844); }
 .training-card-visual.amber { background: linear-gradient(135deg, #fff1c7, #efb94e); }
+.training-card-visual.has-thumbnail { background-position: center; background-size: cover; }
 .training-card-number { position: absolute; top: 15px; left: 16px; color: rgba(47,57,66,.55); font: 700 11px "Cabin"; }
 .training-play { position: absolute; top: 50%; left: 50%; z-index: 2; width: 46px; height: 46px; display: grid; place-items: center; padding-left: 3px; border: 5px solid rgba(255,255,255,.5); border-radius: 50%; background: #fff; color: var(--grey); font-size: 12px; transform: translate(-50%,-50%); box-shadow: 0 8px 20px rgba(36,38,42,.14); }
 .stream-state { position: absolute; right: 12px; bottom: 11px; z-index: 2; padding: 4px 7px; border-radius: 99px; background: rgba(83,86,90,.75); color: #fff; font-size: 7px; font-weight: 700; letter-spacing: .6px; }

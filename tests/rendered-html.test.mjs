@@ -57,8 +57,9 @@ test("includes the live Non-Conformance Event workspace", async () => {
 });
 
 test("includes the Cloudflare Stream training academy", async () => {
-  const [page, envExample, css] = await Promise.all([
+  const [page, route, envExample, css] = await Promise.all([
     readFile(new URL("../app/training/page.tsx", import.meta.url), "utf8"),
+    readFile(new URL("../app/api/training/videos/route.ts", import.meta.url), "utf8"),
     readFile(new URL("../.env.example", import.meta.url), "utf8"),
     readFile(new URL("../app/globals.css", import.meta.url), "utf8"),
   ]);
@@ -68,6 +69,12 @@ test("includes the Cloudflare Stream training academy", async () => {
   assert.match(page, /embed\.cloudflarestream\.com\/embed\/sdk\.latest\.js/);
   assert.match(page, /signed URLs/);
   assert.match(page, /addEventListener\("ended"/);
+  assert.match(page, /\/api\/training\/videos/);
+  assert.match(route, /api\.cloudflare\.com\/client\/v4\/accounts/);
+  assert.match(route, /Authorization: `Bearer \$\{env\.apiToken\}`/);
+  assert.doesNotMatch(route, /NextResponse\.json\([^)]*apiToken/);
+  assert.match(envExample, /CLOUDFLARE_STREAM_API_TOKEN=/);
+  assert.match(envExample, /CLOUDFLARE_STREAM_CUSTOMER_SUBDOMAIN=/);
   assert.match(envExample, /NEXT_PUBLIC_CLOUDFLARE_STREAM_CUSTOMER_CODE=/);
   assert.match(css, /\.training-player iframe/);
   assert.match(css, /\.stream-modal/);
