@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { FormEvent, useEffect, useMemo, useRef, useState } from "react";
+import { FormEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 type Course = {
   id: string;
@@ -42,6 +42,12 @@ type StreamLibraryResponse = {
 type StreamConfig = {
   customerCode: string;
   videoIds: Record<string, string>;
+};
+
+type AuthSession = {
+  authenticated: boolean;
+  username: string;
+  configured: boolean;
 };
 
 type StreamPlayer = {
@@ -146,6 +152,11 @@ export default function TrainingPage() {
   const [category, setCategory] = useState("All topics");
   const [completed, setCompleted] = useState<string[]>([]);
   const [configOpen, setConfigOpen] = useState(false);
+  const [uploadOpen, setUploadOpen] = useState(false);
+  const [uploadProgress, setUploadProgress] = useState(0);
+  const [uploadStatus, setUploadStatus] = useState<"idle" | "preparing" | "uploading" | "processing" | "error">("idle");
+  const [uploadMessage, setUploadMessage] = useState("");
+  const [session, setSession] = useState<AuthSession>({ authenticated: false, username: "", configured: true });
   const [library, setLibrary] = useState<StreamLibraryResponse>({ connected: false, videos: [] });
   const [libraryLoading, setLibraryLoading] = useState(true);
   const [config, setConfig] = useState<StreamConfig>({
@@ -153,6 +164,22 @@ export default function TrainingPage() {
     videoIds: Object.fromEntries(courses.map((course) => [course.id, course.videoUid])),
   });
   const playerRef = useRef<HTMLIFrameElement>(null);
+
+  const refreshLibrary = useCallback(async () => {
+    setLibraryLoading(true);
+    try {
+      const response = await fetch("/api/training/videos", { cache: "no-store" });
+      const payload = (await response.json()) as StreamLibraryResponse;
+      setLibrary(payload);
+      if (payload.connected && payload.videos.length) {
+        setActiveId((current) => payload.videos.some((video) => video.id === current) ? current : payload.videos[0].id);
+      }
+    } catch {
+      setLibrary({ connected: false, videos: [], error: "The Stream library could not be reached." });
+    } finally {
+      setLibraryLoading(false);
+    }
+  }, []);
 
   useEffect(() => {
     const savedConfig = window.localStorage.getItem(configKey);
@@ -182,23 +209,12 @@ export default function TrainingPage() {
   }, []);
 
   useEffect(() => {
-    let active = true;
-    async function loadLibrary() {
-      try {
-        const response = await fetch("/api/training/videos", { cache: "no-store" });
-        const payload = (await response.json()) as StreamLibraryResponse;
-        if (!active) return;
-        setLibrary(payload);
-        if (payload.connected && payload.videos.length) setActiveId(payload.videos[0].id);
-      } catch {
-        if (active) setLibrary({ connected: false, videos: [], error: "The Stream library could not be reached." });
-      } finally {
-        if (active) setLibraryLoading(false);
-      }
-    }
-    void loadLibrary();
-    return () => { active = false; };
-  }, []);
+    void refreshLibrary();
+    void fetch("/api/auth/session", { cache: "no-store" })
+      .then((response) => response.json())
+      .then((payload: AuthSession) => setSession(payload))
+      .catch(() => setSession({ authenticated: false, username: "", configured: false }));
+  }, [refreshLibrary]);
 
   const libraryCourses = useMemo<Course[]>(() => {
     if (!library.connected || !library.videos.length) return courses;
@@ -283,6 +299,80 @@ export default function TrainingPage() {
     setConfigOpen(false);
   }
 
+  async function uploadVideo(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const formElement = event.currentTarget;
+    const form = new FormData(formElement);
+    const file = form.get("video");
+    if (!(file instanceof File) || !file.size) {
+      setUploadStatus("error");
+      setUploadMessage("Choose a video file to upload.");
+      return;
+    }
+    if (file.size > 200 * 1024 * 1024) {
+      setUploadStatus("error");
+      setUploadMessage("This uploader currently accepts files up to 200 MB.");
+      return;
+    }
+
+    setUploadStatus("preparing");
+    setUploadProgress(0);
+    setUploadMessage("Creating a secure one-time upload…");
+
+    try {
+      const response = await fetch("/api/training/upload", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          title: String(form.get("title") ?? ""),
+          description: String(form.get("description") ?? ""),
+          category: String(form.get("category") ?? "Training"),
+          level: String(form.get("level") ?? "Vivad learning"),
+          maxDurationSeconds: Number(form.get("maxDurationSeconds") ?? 3_600),
+        }),
+      });
+      const payload = (await response.json()) as { uploadURL?: string; error?: string; missing?: string[]; loginUrl?: string };
+      if (response.status === 401 && payload.loginUrl) {
+        window.location.assign(payload.loginUrl);
+        return;
+      }
+      if (!response.ok || !payload.uploadURL) {
+        const missing = payload.missing?.length ? ` Add ${payload.missing.join(", ")} to the deployment environment.` : "";
+        throw new Error(`${payload.error || "The upload could not be prepared."}${missing}`);
+      }
+
+      setUploadStatus("uploading");
+      setUploadMessage("Uploading directly to Cloudflare Stream…");
+      const uploadData = new FormData();
+      uploadData.append("file", file);
+
+      await new Promise<void>((resolve, reject) => {
+        const request = new XMLHttpRequest();
+        request.open("POST", payload.uploadURL as string);
+        request.upload.onprogress = (progressEvent) => {
+          if (progressEvent.lengthComputable) {
+            setUploadProgress(Math.round((progressEvent.loaded / progressEvent.total) * 100));
+          }
+        };
+        request.onload = () => {
+          if (request.status >= 200 && request.status < 300) resolve();
+          else reject(new Error(`Cloudflare rejected the upload (${request.status}).`));
+        };
+        request.onerror = () => reject(new Error("The upload was interrupted. Check your connection and try again."));
+        request.send(uploadData);
+      });
+
+      setUploadProgress(100);
+      setUploadStatus("processing");
+      setUploadMessage("Upload complete. Cloudflare is encoding the video; it will appear in the library shortly.");
+      formElement.reset();
+      window.setTimeout(() => void refreshLibrary(), 2500);
+    } catch (error) {
+      setUploadStatus("error");
+      setUploadMessage(error instanceof Error ? error.message : "The video could not be uploaded.");
+    }
+  }
+
   return (
     <div className="training-shell">
       <aside className="training-sidebar">
@@ -309,10 +399,14 @@ export default function TrainingPage() {
             <h1>Training Academy</h1>
             <p>Short, practical learning that connects quality, problem solving, and strategy to the work.</p>
           </div>
-          <button className="stream-config-button" type="button" onClick={() => setConfigOpen(true)}>
-            <span className={library.connected || config.customerCode ? "connected" : ""} />
-            {libraryLoading ? "Checking Stream…" : library.connected ? `${library.videos.length} Stream videos` : config.customerCode ? "Stream connected" : "Configure Stream"}
-          </button>
+          <div className="training-top-actions">
+            {session.authenticated && <span className="training-signed-in">Signed in as <strong>{session.username}</strong> · <a href="/hoshin-logout">Sign out</a></span>}
+            <button className="training-upload-button" type="button" onClick={() => { if (!session.authenticated) { window.location.assign("/hoshin-login?return_to=/training"); return; } setUploadStatus("idle"); setUploadMessage(""); setUploadProgress(0); setUploadOpen(true); }}><span>＋</span> {session.authenticated ? "Upload video" : "Sign in to upload"}</button>
+            <button className="stream-config-button" type="button" onClick={() => setConfigOpen(true)}>
+              <span className={library.connected || config.customerCode ? "connected" : ""} />
+              {libraryLoading ? "Checking Stream…" : library.connected ? `${library.videos.length} Stream videos` : config.customerCode ? "Stream connected" : "Configure Stream"}
+            </button>
+          </div>
         </header>
 
         <section className="training-feature">
@@ -396,6 +490,25 @@ export default function TrainingPage() {
             </div>
             <div className="stream-security-note"><span>◎</span><p><strong>Protect internal training.</strong> In Cloudflare Stream, restrict allowed origins to your Vivad site. For stronger access control, enable signed URLs before wider rollout.</p></div>
             <div className="stream-modal-actions"><a href="https://dash.cloudflare.com/?to=/:account/stream/videos" target="_blank" rel="noreferrer">Open Stream dashboard ↗</a><button type="submit">Save connection</button></div>
+          </form>
+        </div>
+      )}
+
+      {uploadOpen && (
+        <div className="stream-modal-backdrop" role="presentation" onMouseDown={() => uploadStatus !== "uploading" && setUploadOpen(false)}>
+          <form className="stream-modal training-upload-modal" onSubmit={uploadVideo} onMouseDown={(event) => event.stopPropagation()}>
+            <div className="stream-modal-head"><div><span className="training-eyebrow">CLOUDFLARE DIRECT UPLOAD</span><h2>Add a training video</h2></div><button type="button" disabled={uploadStatus === "uploading"} onClick={() => setUploadOpen(false)} aria-label="Close uploader">×</button></div>
+            <p>The video goes directly from your browser to Cloudflare Stream. The Hoshin app never handles the video file or exposes the Stream API token.</p>
+            <label className="training-upload-drop"><span>VIDEO FILE · MAXIMUM 200 MB</span><input name="video" type="file" accept="video/*" required disabled={uploadStatus === "uploading" || uploadStatus === "preparing"} /></label>
+            <div className="training-upload-fields">
+              <label><span>Title</span><input name="title" placeholder="e.g. How to record a non-conformance" required disabled={uploadStatus === "uploading" || uploadStatus === "preparing"} /></label>
+              <label><span>Topic</span><select name="category" defaultValue="Quality" disabled={uploadStatus === "uploading" || uploadStatus === "preparing"}><option>Quality</option><option>Problem solving</option><option>Operations</option><option>Strategy</option><option>Leadership</option><option>Safety</option><option>Training</option></select></label>
+              <label className="training-upload-wide"><span>Description</span><textarea name="description" rows={3} placeholder="What will people learn?" disabled={uploadStatus === "uploading" || uploadStatus === "preparing"} /></label>
+              <label><span>Level</span><select name="level" defaultValue="Vivad learning" disabled={uploadStatus === "uploading" || uploadStatus === "preparing"}><option>Essential</option><option>Core skill</option><option>Leader practice</option><option>Vivad learning</option></select></label>
+              <label><span>Maximum duration</span><select name="maxDurationSeconds" defaultValue="3600" disabled={uploadStatus === "uploading" || uploadStatus === "preparing"}><option value="600">10 minutes</option><option value="1800">30 minutes</option><option value="3600">60 minutes</option><option value="7200">2 hours</option></select></label>
+            </div>
+            {uploadStatus !== "idle" && <div className={`training-upload-status ${uploadStatus}`}><div><span>{uploadStatus === "processing" ? "✓" : uploadStatus === "error" ? "!" : "↑"}</span><p><strong>{uploadStatus === "preparing" ? "Preparing upload" : uploadStatus === "uploading" ? `Uploading · ${uploadProgress}%` : uploadStatus === "processing" ? "Processing started" : "Upload needs attention"}</strong><small>{uploadMessage}</small></p></div>{uploadStatus === "uploading" && <div className="training-upload-progress"><i style={{ width: `${uploadProgress}%` }} /></div>}</div>}
+            <div className="stream-modal-actions"><small>MP4, MOV, WebM and other common video formats</small><button type="submit" disabled={uploadStatus === "preparing" || uploadStatus === "uploading"}>{uploadStatus === "preparing" ? "Preparing…" : uploadStatus === "uploading" ? `Uploading ${uploadProgress}%` : uploadStatus === "processing" ? "Upload another" : "Start upload"}</button></div>
           </form>
         </div>
       )}

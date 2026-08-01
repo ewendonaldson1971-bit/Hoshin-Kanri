@@ -79,3 +79,24 @@ test("includes the Cloudflare Stream training academy", async () => {
   assert.match(css, /\.training-player iframe/);
   assert.match(css, /\.stream-modal/);
 });
+
+test("protects Stream uploads with the Lotus login system", async () => {
+  const [page, uploadRoute, sessionRoute, auth, envExample] = await Promise.all([
+    readFile(new URL("../app/training/page.tsx", import.meta.url), "utf8"),
+    readFile(new URL("../app/api/training/upload/route.ts", import.meta.url), "utf8"),
+    readFile(new URL("../app/api/auth/session/route.ts", import.meta.url), "utf8"),
+    readFile(new URL("../lib/auth/hoshin-auth.ts", import.meta.url), "utf8"),
+    readFile(new URL("../.env.example", import.meta.url), "utf8"),
+  ]);
+
+  assert.match(page, /Sign in to upload/);
+  assert.match(page, /CLOUDFLARE DIRECT UPLOAD/);
+  assert.match(uploadRoute, /getHoshinSessionUsername/);
+  assert.match(uploadRoute, /stream\/direct_upload/);
+  assert.match(sessionRoute, /authenticated: Boolean\(username\)/);
+  assert.match(auth, /application: "Lotus"/);
+  assert.match(auth, /HttpOnly; SameSite=Lax/);
+  assert.match(envExample, /LOTUS_AUTH_SECRET=/);
+  assert.doesNotMatch(page, /Upload access key/);
+  assert.doesNotMatch(uploadRoute, /CLOUDFLARE_STREAM_UPLOAD_SECRET/);
+});
