@@ -54,7 +54,6 @@ export async function GET() {
   const missing = [
     !env.accountId && "CLOUDFLARE_ACCOUNT_ID",
     !env.apiToken && "CLOUDFLARE_STREAM_API_TOKEN",
-    !env.customerSubdomain && "CLOUDFLARE_STREAM_CUSTOMER_SUBDOMAIN",
   ].filter(Boolean);
 
   if (missing.length) {
@@ -110,9 +109,21 @@ export async function GET() {
       })
       .sort((a, b) => (b.created ?? "").localeCompare(a.created ?? ""));
 
+    const derivedStreamHost = videos
+      .map((video) => video.thumbnail)
+      .filter(Boolean)
+      .map((thumbnail) => {
+        try {
+          return new URL(thumbnail).hostname;
+        } catch {
+          return "";
+        }
+      })
+      .find((hostname) => hostname.endsWith(".cloudflarestream.com"));
+
     return NextResponse.json({
       connected: true,
-      streamHost: normaliseStreamHost(env.customerSubdomain),
+      streamHost: normaliseStreamHost(env.customerSubdomain) || derivedStreamHost || "",
       videos,
       refreshedAt: new Date().toISOString(),
     });
