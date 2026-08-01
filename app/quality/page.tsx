@@ -211,6 +211,7 @@ export default function QualityPage() {
           <span className="quality-nav-label">Workspace</span>
           <Link href="/strategy"><i>◎</i> Strategy</Link>
           <Link className="active" href="/quality"><i>◇</i> Quality events</Link>
+          <Link href="/training"><i>▷</i> Training academy</Link>
           <a href="#trends"><i>↗</i> Trends</a>
           <a href="#event-log"><i>☷</i> Event log</a>
         </nav>

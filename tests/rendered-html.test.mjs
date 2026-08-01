@@ -55,3 +55,20 @@ test("includes the live Non-Conformance Event workspace", async () => {
   assert.match(css, /\.quality-table/);
   assert.match(css, /@media \(max-width: 620px\)/);
 });
+
+test("includes the Cloudflare Stream training academy", async () => {
+  const [page, envExample, css] = await Promise.all([
+    readFile(new URL("../app/training/page.tsx", import.meta.url), "utf8"),
+    readFile(new URL("../.env.example", import.meta.url), "utf8"),
+    readFile(new URL("../app/globals.css", import.meta.url), "utf8"),
+  ]);
+
+  assert.match(page, /Training Academy/);
+  assert.match(page, /cloudflarestream\.com/);
+  assert.match(page, /embed\.cloudflarestream\.com\/embed\/sdk\.latest\.js/);
+  assert.match(page, /signed URLs/);
+  assert.match(page, /addEventListener\("ended"/);
+  assert.match(envExample, /NEXT_PUBLIC_CLOUDFLARE_STREAM_CUSTOMER_CODE=/);
+  assert.match(css, /\.training-player iframe/);
+  assert.match(css, /\.stream-modal/);
+});

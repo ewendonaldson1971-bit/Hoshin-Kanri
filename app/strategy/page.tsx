@@ -101,6 +101,9 @@ export default function Home() {
           <Link className="nav-item" href="/quality">
             <span className="nav-icon">◇</span> Quality events
           </Link>
+          <Link className="nav-item" href="/training">
+            <span className="nav-icon">▷</span> Training academy
+          </Link>
           <button className="nav-item" type="button">
             <span className="nav-icon">◎</span> Scorecards
           </button>

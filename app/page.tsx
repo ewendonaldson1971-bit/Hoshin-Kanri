@@ -37,6 +37,7 @@ export default function HomePage() {
           <a href="#alignment">Alignment</a>
           <a href="#rhythm">Review rhythm</a>
           <Link href="/quality">Quality events</Link>
+          <Link href="/training">Training</Link>
         </nav>
         <Link className="button button-primary header-cta" href="/strategy">
           Open workspace <span>→</span>
