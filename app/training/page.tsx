@@ -18,6 +18,7 @@ type Course = {
   requiresSignedUrls?: boolean;
   source?: "stream" | "youtube";
   youtubeId?: string;
+  created?: string | null;
 };
 
 type StreamLibraryResponse = {
@@ -38,6 +39,7 @@ type StreamLibraryResponse = {
     thumbnail: string;
     ready: boolean;
     requiresSignedUrls: boolean;
+    created?: string | null;
   }>;
 };
 
@@ -201,7 +203,8 @@ export default function TrainingPage() {
       const payload = (await response.json()) as StreamLibraryResponse;
       setLibrary(payload);
       if (payload.connected && payload.videos.length) {
-        setActiveId((current) => payload.videos.some((video) => video.id === current) ? current : payload.videos[0].id);
+        const requested = new URLSearchParams(window.location.search).get("video");
+        setActiveId((current) => requested && payload.videos.some((video) => video.id === requested) ? requested : payload.videos.some((video) => video.id === current) ? current : payload.videos[0].id);
       }
     } catch {
       setLibrary({ connected: false, videos: [], error: "The Stream library could not be reached." });
@@ -230,7 +233,10 @@ export default function TrainingPage() {
     }
     if (savedYoutube) {
       try {
-        setYoutubeCourses(JSON.parse(savedYoutube) as Course[]);
+        const linkedCourses = JSON.parse(savedYoutube) as Course[];
+        setYoutubeCourses(linkedCourses);
+        const requested = new URLSearchParams(window.location.search).get("video");
+        if (requested && linkedCourses.some((course) => course.id === requested)) setActiveId(requested);
       } catch {
         window.localStorage.removeItem(youtubeKey);
       }
@@ -269,6 +275,7 @@ export default function TrainingPage() {
       thumbnail: video.thumbnail,
       ready: video.ready,
       requiresSignedUrls: video.requiresSignedUrls,
+      created: video.created ?? null,
       source: "stream" as const,
     }));
     return [...streamCourses, ...youtubeCourses];
@@ -363,6 +370,7 @@ export default function TrainingPage() {
         videoUid: "",
         source: "youtube",
         youtubeId: videoId,
+        created: new Date().toISOString(),
       };
       setYoutubeCourses((current) => {
         const next = [...current.filter((course) => course.youtubeId !== videoId), nextCourse];

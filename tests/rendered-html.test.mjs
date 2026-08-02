@@ -48,11 +48,16 @@ test("includes the live Non-Conformance Event workspace", async () => {
   assert.match(page, /Monthly trend/);
   assert.match(page, /All departments/);
   assert.match(page, /Open Google Sheet/);
+  assert.match(page, /Training added this week/);
+  assert.match(page, /\/api\/training\/videos/);
+  assert.match(page, /vivad-youtube-training-links/);
+  assert.match(page, /\/training\?video=/);
   assert.match(route, /export\?format=csv&gid=/);
   assert.match(route, /normaliseStatus/);
   assert.match(route, /NextResponse\.json/);
   assert.match(css, /\.quality-kpis/);
   assert.match(css, /\.quality-table/);
+  assert.match(css, /\.quality-training-widget/);
   assert.match(css, /@media \(max-width: 620px\)/);
 });
 

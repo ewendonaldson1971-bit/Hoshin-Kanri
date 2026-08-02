@@ -31,8 +31,24 @@ type QualityResponse = {
   error?: string;
 };
 
+type TrainingVideo = {
+  id: string;
+  title: string;
+  category: string;
+  created: string | null;
+  ready?: boolean;
+  source?: "stream" | "youtube";
+};
+
+type TrainingResponse = {
+  videos: TrainingVideo[];
+  connected?: boolean;
+  error?: string;
+};
+
 const SHEET_LINK =
   "https://docs.google.com/spreadsheets/d/1aKVB1RjaQSoEW9yw14YJ2asSrsSwDDR3EB2KnSfPRMc/edit?gid=407617143#gid=407617143";
+const YOUTUBE_TRAINING_KEY = "vivad-youtube-training-links";
 
 function isComplete(status: string) {
   return status === "Completed";
@@ -66,6 +82,7 @@ export default function QualityPage() {
   const [category, setCategory] = useState("All categories");
   const [department, setDepartment] = useState("All departments");
   const [selected, setSelected] = useState<QualityEvent | null>(null);
+  const [training, setTraining] = useState<TrainingResponse>({ videos: [] });
 
   const loadEvents = useCallback(async () => {
     setLoading(true);
@@ -80,9 +97,40 @@ export default function QualityPage() {
     }
   }, []);
 
+  const loadTraining = useCallback(async () => {
+    let linkedVideos: TrainingVideo[] = [];
+    try {
+      const saved = window.localStorage.getItem(YOUTUBE_TRAINING_KEY);
+      if (saved) {
+        linkedVideos = (JSON.parse(saved) as Array<TrainingVideo & { youtubeId?: string }>)
+          .filter((video) => video.youtubeId)
+          .map((video) => ({ ...video, source: "youtube" as const }));
+      }
+    } catch {
+      window.localStorage.removeItem(YOUTUBE_TRAINING_KEY);
+    }
+
+    try {
+      const response = await fetch("/api/training/videos", { cache: "no-store" });
+      const payload = (await response.json()) as TrainingResponse;
+      setTraining({ ...payload, videos: [...(payload.videos ?? []), ...linkedVideos] });
+    } catch {
+      setTraining({ videos: linkedVideos, error: "The training library could not be reached." });
+    }
+  }, []);
+
   useEffect(() => {
     void loadEvents();
-  }, [loadEvents]);
+    void loadTraining();
+  }, [loadEvents, loadTraining]);
+
+  const recentVideos = useMemo(() => {
+    const weekAgo = Date.now() - 7 * 24 * 60 * 60 * 1000;
+    return training.videos
+      .filter((video) => video.created && new Date(video.created).getTime() >= weekAgo)
+      .sort((a, b) => new Date(b.created ?? 0).getTime() - new Date(a.created ?? 0).getTime())
+      .slice(0, 4);
+  }, [training.videos]);
 
   const categories = useMemo(
     () =>
@@ -265,6 +313,26 @@ export default function QualityPage() {
             <div className="kpi-icon green">✓</div>
             <div><span>Completion rate</span><strong>{loading ? "—" : `${summary.completionRate}%`}</strong><small>{summary.completed} events closed</small></div>
           </article>
+        </section>
+
+        <section className="quality-training-widget" aria-labelledby="new-training-title">
+          <div className="quality-training-heading">
+            <div><span>NEW CAPABILITY</span><h2 id="new-training-title">Training added this week</h2></div>
+            <Link href="/training">Open academy <span>→</span></Link>
+          </div>
+          {recentVideos.length ? (
+            <div className="quality-training-links">
+              {recentVideos.map((video) => (
+                <Link href={`/training?video=${encodeURIComponent(video.id)}`} key={video.id}>
+                  <span className={video.source === "youtube" ? "youtube" : "stream"}>{video.source === "youtube" ? "▶" : "▷"}</span>
+                  <div><strong>{video.title}</strong><small>{video.category} · {video.created ? new Date(video.created).toLocaleDateString("en-AU", { day: "numeric", month: "short" }) : "This week"}</small></div>
+                  <i>{video.ready === false ? "Processing" : "Watch"} →</i>
+                </Link>
+              ))}
+            </div>
+          ) : (
+            <div className="quality-training-empty"><span>▷</span><p><strong>No new videos in the last seven days.</strong><small>New Cloudflare and linked YouTube training will appear here automatically.</small></p></div>
+          )}
         </section>
 
         <section className="quality-insights" id="trends">
