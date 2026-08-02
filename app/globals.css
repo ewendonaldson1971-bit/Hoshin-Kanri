@@ -1110,8 +1110,21 @@ select:focus, input:focus { border-color: var(--blue); box-shadow: 0 0 0 3px rgb
 .stream-modal-actions a { color: var(--blue); font-size: 9px; font-weight: 700; text-decoration: none; }
 .stream-modal-actions button { min-height: 40px; padding: 0 20px; border: 0; border-radius: 99px; background: var(--blue); color: #fff; font-size: 10px; font-weight: 700; }
 .training-upload-modal { width: min(760px, 96vw); }
-.training-upload-drop { margin-bottom: 16px; padding: 17px; border: 1px dashed #b8c9dc; border-radius: 8px; background: var(--soft-blue); }
-.training-upload-drop input { width: 100%; padding: 9px; background: #fff; }
+.training-source-tabs { display: inline-flex; gap: 5px; margin: 17px 0 0; padding: 4px; border-radius: 99px; background: #f0f2f5; }
+.training-source-tabs button { min-height: 35px; padding: 0 15px; border: 0; border-radius: 99px; background: transparent; color: #777b82; font-size: 9px; font-weight: 700; }
+.training-source-tabs button.active { background: #fff; color: var(--blue); box-shadow: 0 2px 8px rgba(40,48,56,.09); }
+.training-upload-drop { position: relative; min-height: 135px; display: flex !important; align-items: center; justify-content: center; flex-direction: column; gap: 7px !important; margin-bottom: 16px; padding: 22px; border: 1px dashed #9dbde1; border-radius: 9px; background: var(--soft-blue); color: var(--blue-dark); text-align: center; cursor: pointer; transition: .18s ease; }
+.training-upload-drop:hover, .training-upload-drop.dragging { border-color: var(--blue); background: #e5f1ff; box-shadow: inset 0 0 0 2px rgba(71,143,225,.1); transform: translateY(-1px); }
+.training-upload-drop.selected { border-style: solid; background: #eef8e2; border-color: #afd37e; color: #568c0d; }
+.training-file-input { position: absolute; width: 1px !important; height: 1px; padding: 0 !important; overflow: hidden; clip: rect(0 0 0 0); clip-path: inset(50%); white-space: nowrap; }
+.training-drop-icon { width: 38px; height: 38px; display: grid; place-items: center; border-radius: 50%; background: #fff; color: currentColor !important; font-size: 18px !important; box-shadow: 0 5px 14px rgba(48,91,135,.13); }
+.training-upload-drop strong { max-width: 90%; overflow: hidden; color: currentColor; font: 700 13px "Cabin"; text-overflow: ellipsis; white-space: nowrap; }
+.training-upload-drop small { color: #748494; font-size: 8px; }
+.training-youtube-field { margin-bottom: 16px; }
+.training-youtube-field > div { min-height: 48px; display: flex; align-items: center; gap: 10px; padding: 0 13px; border: 1px solid #f1b4b4; border-radius: 8px; background: #fff7f7; }
+.training-youtube-field i { width: 26px; height: 20px; display: grid; place-items: center; border-radius: 6px; background: #ff0033; color: #fff; font-size: 8px; font-style: normal; }
+.training-youtube-field input { flex: 1; min-height: 44px; padding: 0 !important; border: 0 !important; background: transparent; box-shadow: none !important; }
+.training-youtube-field small { color: #858990; font-size: 8px; }
 .training-upload-fields { display: grid; grid-template-columns: 1fr 1fr; gap: 13px; }
 .training-upload-fields .training-upload-wide { grid-column: 1 / -1; }
 .training-upload-fields select, .training-upload-fields textarea { width: 100%; padding: 10px 12px; border: 1px solid var(--line); border-radius: 6px; color: var(--grey); font: inherit; font-size: 10px; resize: vertical; }

@@ -89,8 +89,13 @@ test("protects Stream uploads with the Lotus login system", async () => {
     readFile(new URL("../.env.example", import.meta.url), "utf8"),
   ]);
 
-  assert.match(page, /Sign in to upload/);
-  assert.match(page, /CLOUDFLARE DIRECT UPLOAD/);
+  assert.match(page, /Sign in to add video/);
+  assert.match(page, /TRAINING VIDEO LIBRARY/);
+  assert.match(page, /Drag and drop your video/);
+  assert.match(page, /Paste from YouTube/);
+  assert.match(page, /youtube-nocookie\.com\/embed/);
+  assert.match(page, /vivad-youtube-training-links/);
+  assert.match(page, /onDrop=\{dropFile\}/);
   assert.match(uploadRoute, /getHoshinSessionUsername/);
   assert.match(uploadRoute, /stream\/direct_upload/);
   assert.match(sessionRoute, /authenticated: Boolean\(username\)/);

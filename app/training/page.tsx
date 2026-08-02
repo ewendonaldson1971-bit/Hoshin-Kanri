@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { FormEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { ChangeEvent, DragEvent, FormEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 type Course = {
   id: string;
@@ -16,6 +16,8 @@ type Course = {
   thumbnail?: string;
   ready?: boolean;
   requiresSignedUrls?: boolean;
+  source?: "stream" | "youtube";
+  youtubeId?: string;
 };
 
 type StreamLibraryResponse = {
@@ -131,6 +133,28 @@ const courses: Course[] = [
 
 const configKey = "vivad-stream-training-config";
 const progressKey = "vivad-stream-training-progress";
+const youtubeKey = "vivad-youtube-training-links";
+
+function youtubeVideoId(value: string) {
+  try {
+    const url = new URL(value.trim());
+    if (url.hostname === "youtu.be") return url.pathname.split("/").filter(Boolean)[0] ?? "";
+    if (url.hostname === "youtube.com" || url.hostname.endsWith(".youtube.com")) {
+      if (url.pathname === "/watch") return url.searchParams.get("v") ?? "";
+      const parts = url.pathname.split("/").filter(Boolean);
+      if (["embed", "shorts", "live"].includes(parts[0] ?? "")) return parts[1] ?? "";
+    }
+  } catch {
+    return "";
+  }
+  return "";
+}
+
+function fileSize(bytes: number) {
+  return bytes >= 1024 * 1024
+    ? `${(bytes / (1024 * 1024)).toFixed(1)} MB`
+    : `${Math.max(1, Math.round(bytes / 1024))} KB`;
+}
 
 function formatDuration(seconds: number) {
   if (!seconds) return "Duration pending";
@@ -156,6 +180,10 @@ export default function TrainingPage() {
   const [uploadProgress, setUploadProgress] = useState(0);
   const [uploadStatus, setUploadStatus] = useState<"idle" | "preparing" | "uploading" | "processing" | "error">("idle");
   const [uploadMessage, setUploadMessage] = useState("");
+  const [uploadSource, setUploadSource] = useState<"file" | "youtube">("file");
+  const [selectedFile, setSelectedFile] = useState<File | null>(null);
+  const [dragActive, setDragActive] = useState(false);
+  const [youtubeCourses, setYoutubeCourses] = useState<Course[]>([]);
   const [session, setSession] = useState<AuthSession>({ authenticated: false, username: "", configured: true });
   const [library, setLibrary] = useState<StreamLibraryResponse>({ connected: false, videos: [] });
   const [libraryLoading, setLibraryLoading] = useState(true);
@@ -164,6 +192,7 @@ export default function TrainingPage() {
     videoIds: Object.fromEntries(courses.map((course) => [course.id, course.videoUid])),
   });
   const playerRef = useRef<HTMLIFrameElement>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const refreshLibrary = useCallback(async () => {
     setLibraryLoading(true);
@@ -184,6 +213,7 @@ export default function TrainingPage() {
   useEffect(() => {
     const savedConfig = window.localStorage.getItem(configKey);
     const savedProgress = window.localStorage.getItem(progressKey);
+    const savedYoutube = window.localStorage.getItem(youtubeKey);
     if (savedConfig) {
       try {
         setConfig(JSON.parse(savedConfig) as StreamConfig);
@@ -196,6 +226,13 @@ export default function TrainingPage() {
         setCompleted(JSON.parse(savedProgress) as string[]);
       } catch {
         window.localStorage.removeItem(progressKey);
+      }
+    }
+    if (savedYoutube) {
+      try {
+        setYoutubeCourses(JSON.parse(savedYoutube) as Course[]);
+      } catch {
+        window.localStorage.removeItem(youtubeKey);
       }
     }
 
@@ -217,9 +254,9 @@ export default function TrainingPage() {
   }, [refreshLibrary]);
 
   const libraryCourses = useMemo<Course[]>(() => {
-    if (!library.connected || !library.videos.length) return courses;
+    if (!library.connected || !library.videos.length) return [...courses, ...youtubeCourses];
     const accents: Course["accent"][] = ["blue", "green", "red", "amber"];
-    return library.videos.map((video, index) => ({
+    const streamCourses = library.videos.map((video, index) => ({
       id: video.id,
       title: video.title,
       description: video.description,
@@ -232,8 +269,10 @@ export default function TrainingPage() {
       thumbnail: video.thumbnail,
       ready: video.ready,
       requiresSignedUrls: video.requiresSignedUrls,
+      source: "stream" as const,
     }));
-  }, [library]);
+    return [...streamCourses, ...youtubeCourses];
+  }, [library, youtubeCourses]);
 
   const categories = useMemo(
     () => ["All topics", ...Array.from(new Set(libraryCourses.map((course) => course.category)))],
@@ -256,10 +295,11 @@ export default function TrainingPage() {
 
   const activeCourse = libraryCourses.find((course) => course.id === activeId) ?? libraryCourses[0];
   const activeUid = activeCourse.videoUid || config.videoIds[activeCourse.id];
+  const isYoutube = Boolean(activeCourse.youtubeId);
   const streamHost = library.streamHost || manualStreamHost(config.customerCode);
   const isProtected = Boolean(activeCourse.requiresSignedUrls);
   const isReady = activeCourse.ready !== false;
-  const isConnected = Boolean(streamHost && activeUid?.trim() && isReady && !isProtected);
+  const isConnected = Boolean(!isYoutube && streamHost && activeUid?.trim() && isReady && !isProtected);
   const completionRate = libraryCourses.length ? Math.round((completed.filter((id) => libraryCourses.some((course) => course.id === id)).length / libraryCourses.length) * 100) : 0;
 
   function markComplete(courseId: string) {
@@ -303,8 +343,41 @@ export default function TrainingPage() {
     event.preventDefault();
     const formElement = event.currentTarget;
     const form = new FormData(formElement);
-    const file = form.get("video");
-    if (!(file instanceof File) || !file.size) {
+    if (uploadSource === "youtube") {
+      const videoId = youtubeVideoId(String(form.get("youtubeUrl") ?? ""));
+      if (!videoId || !/^[\w-]{6,20}$/.test(videoId)) {
+        setUploadStatus("error");
+        setUploadMessage("Paste a valid YouTube video, Shorts, Live, or youtu.be link.");
+        return;
+      }
+      const title = String(form.get("title") ?? "").trim();
+      const nextCourse: Course = {
+        id: `youtube-${videoId}`,
+        title,
+        description: String(form.get("description") ?? "").trim() || "Watch this linked YouTube training video.",
+        category: String(form.get("category") ?? "Training"),
+        duration: "YouTube",
+        level: String(form.get("level") ?? "Vivad learning"),
+        owner: session.username || "Vivad",
+        accent: "red",
+        videoUid: "",
+        source: "youtube",
+        youtubeId: videoId,
+      };
+      setYoutubeCourses((current) => {
+        const next = [...current.filter((course) => course.youtubeId !== videoId), nextCourse];
+        window.localStorage.setItem(youtubeKey, JSON.stringify(next));
+        return next;
+      });
+      setActiveId(nextCourse.id);
+      setUploadProgress(100);
+      setUploadStatus("processing");
+      setUploadMessage("YouTube module added to this device and opened in the learning library.");
+      return;
+    }
+
+    const file = selectedFile;
+    if (!file?.size) {
       setUploadStatus("error");
       setUploadMessage("Choose a video file to upload.");
       return;
@@ -365,12 +438,44 @@ export default function TrainingPage() {
       setUploadProgress(100);
       setUploadStatus("processing");
       setUploadMessage("Upload complete. Cloudflare is encoding the video; it will appear in the library shortly.");
+      setSelectedFile(null);
       formElement.reset();
       window.setTimeout(() => void refreshLibrary(), 2500);
     } catch (error) {
       setUploadStatus("error");
       setUploadMessage(error instanceof Error ? error.message : "The video could not be uploaded.");
     }
+  }
+
+  function chooseFile(event: ChangeEvent<HTMLInputElement>) {
+    setSelectedFile(event.target.files?.[0] ?? null);
+    setUploadStatus("idle");
+    setUploadMessage("");
+  }
+
+  function dropFile(event: DragEvent<HTMLLabelElement>) {
+    event.preventDefault();
+    setDragActive(false);
+    const file = event.dataTransfer.files?.[0];
+    if (!file) return;
+    if (!file.type.startsWith("video/")) {
+      setUploadStatus("error");
+      setUploadMessage("Drop a video file such as MP4, MOV, or WebM.");
+      return;
+    }
+    setSelectedFile(file);
+    setUploadStatus("idle");
+    setUploadMessage("");
+  }
+
+  function openUploader() {
+    setUploadStatus("idle");
+    setUploadMessage("");
+    setUploadProgress(0);
+    setSelectedFile(null);
+    setDragActive(false);
+    setUploadSource("file");
+    setUploadOpen(true);
   }
 
   return (
@@ -401,7 +506,7 @@ export default function TrainingPage() {
           </div>
           <div className="training-top-actions">
             {session.authenticated && <span className="training-signed-in">Signed in as <strong>{session.username}</strong> · <a href="/hoshin-logout">Sign out</a></span>}
-            <button className="training-upload-button" type="button" onClick={() => { if (!session.authenticated) { window.location.assign("/hoshin-login?return_to=/training"); return; } setUploadStatus("idle"); setUploadMessage(""); setUploadProgress(0); setUploadOpen(true); }}><span>＋</span> {session.authenticated ? "Upload video" : "Sign in to upload"}</button>
+            <button className="training-upload-button" type="button" onClick={() => { if (!session.authenticated) { window.location.assign("/hoshin-login?return_to=/training"); return; } openUploader(); }}><span>＋</span> {session.authenticated ? "Add video" : "Sign in to add video"}</button>
             <button className="stream-config-button" type="button" onClick={() => setConfigOpen(true)}>
               <span className={library.connected || config.customerCode ? "connected" : ""} />
               {libraryLoading ? "Checking Stream…" : library.connected ? `${library.videos.length} Stream videos` : config.customerCode ? "Stream connected" : "Configure Stream"}
@@ -411,7 +516,16 @@ export default function TrainingPage() {
 
         <section className="training-feature">
           <div className="training-player">
-            {isConnected ? (
+            {isYoutube ? (
+              <iframe
+                key={activeCourse.youtubeId}
+                src={`https://www.youtube-nocookie.com/embed/${activeCourse.youtubeId}?rel=0`}
+                title={activeCourse.title}
+                allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+                referrerPolicy="strict-origin-when-cross-origin"
+                allowFullScreen
+              />
+            ) : isConnected ? (
               <iframe
                 key={`${streamHost}-${activeUid}`}
                 ref={playerRef}
@@ -456,14 +570,14 @@ export default function TrainingPage() {
           </div>
           <div className="training-grid">
             {filteredCourses.map((course, index) => {
-              const connected = Boolean(streamHost && (config.videoIds[course.id] || course.videoUid) && course.ready !== false && !course.requiresSignedUrls);
+              const connected = Boolean(course.youtubeId || (streamHost && (config.videoIds[course.id] || course.videoUid) && course.ready !== false && !course.requiresSignedUrls));
               const done = completed.includes(course.id);
               return (
                 <article className={activeId === course.id ? "training-card active" : "training-card"} key={course.id}>
                   <button className={`training-card-visual ${course.accent} ${course.thumbnail ? "has-thumbnail" : ""}`} style={course.thumbnail ? { backgroundImage: `linear-gradient(rgba(26,30,35,.12), rgba(26,30,35,.42)), url(${course.thumbnail})` } : undefined} type="button" onClick={() => { setActiveId(course.id); window.scrollTo({ top: 0, behavior: "smooth" }); }} aria-label={`Open ${course.title}`}>
                     <span className="training-card-number">{String(index + 1).padStart(2, "0")}</span>
                     <span className="training-play">▶</span>
-                    <span className={connected ? "stream-state connected" : "stream-state"}>{course.requiresSignedUrls ? "SIGNED / LOCKED" : course.ready === false ? "PROCESSING" : connected ? "STREAM READY" : "ADD VIDEO"}</span>
+                    <span className={connected ? "stream-state connected" : "stream-state"}>{course.youtubeId ? "YOUTUBE LINK" : course.requiresSignedUrls ? "SIGNED / LOCKED" : course.ready === false ? "PROCESSING" : connected ? "STREAM READY" : "ADD VIDEO"}</span>
                   </button>
                   <div className="training-card-body">
                     <div><span>{course.category}</span><span>{course.duration}</span></div>
@@ -497,18 +611,37 @@ export default function TrainingPage() {
       {uploadOpen && (
         <div className="stream-modal-backdrop" role="presentation" onMouseDown={() => uploadStatus !== "uploading" && setUploadOpen(false)}>
           <form className="stream-modal training-upload-modal" onSubmit={uploadVideo} onMouseDown={(event) => event.stopPropagation()}>
-            <div className="stream-modal-head"><div><span className="training-eyebrow">CLOUDFLARE DIRECT UPLOAD</span><h2>Add a training video</h2></div><button type="button" disabled={uploadStatus === "uploading"} onClick={() => setUploadOpen(false)} aria-label="Close uploader">×</button></div>
-            <p>The video goes directly from your browser to Cloudflare Stream. The Hoshin app never handles the video file or exposes the Stream API token.</p>
-            <label className="training-upload-drop"><span>VIDEO FILE · MAXIMUM 200 MB</span><input name="video" type="file" accept="video/*" required disabled={uploadStatus === "uploading" || uploadStatus === "preparing"} /></label>
+            <div className="stream-modal-head"><div><span className="training-eyebrow">TRAINING VIDEO LIBRARY</span><h2>Add a training video</h2></div><button type="button" disabled={uploadStatus === "uploading"} onClick={() => setUploadOpen(false)} aria-label="Close uploader">×</button></div>
+            <div className="training-source-tabs" role="tablist" aria-label="Video source">
+              <button className={uploadSource === "file" ? "active" : ""} type="button" role="tab" aria-selected={uploadSource === "file"} onClick={() => { setUploadSource("file"); setUploadStatus("idle"); setUploadMessage(""); }}>↑ Upload a file</button>
+              <button className={uploadSource === "youtube" ? "active" : ""} type="button" role="tab" aria-selected={uploadSource === "youtube"} onClick={() => { setUploadSource("youtube"); setUploadStatus("idle"); setUploadMessage(""); }}>▶ Paste from YouTube</button>
+            </div>
+            <p>{uploadSource === "file" ? "Drag a video here or choose one from your device. It uploads directly to Cloudflare Stream, so Hoshin never handles the file or exposes the API token." : "Paste a YouTube link to add its official embedded player to your learning library. Linked modules are saved on this device."}</p>
+            {uploadSource === "file" ? (
+              <label
+                className={`training-upload-drop ${dragActive ? "dragging" : ""} ${selectedFile ? "selected" : ""}`}
+                onDragEnter={(event) => { event.preventDefault(); setDragActive(true); }}
+                onDragOver={(event) => { event.preventDefault(); setDragActive(true); }}
+                onDragLeave={(event) => { if (!event.currentTarget.contains(event.relatedTarget as Node)) setDragActive(false); }}
+                onDrop={dropFile}
+              >
+                <input ref={fileInputRef} className="training-file-input" name="video" type="file" accept="video/*" onChange={chooseFile} disabled={uploadStatus === "uploading" || uploadStatus === "preparing"} />
+                <span className="training-drop-icon">{selectedFile ? "✓" : "↑"}</span>
+                <strong>{selectedFile ? selectedFile.name : dragActive ? "Drop your video here" : "Drag and drop your video"}</strong>
+                <small>{selectedFile ? `${fileSize(selectedFile.size)} · Click to choose a different file` : "or click to browse · MP4, MOV, WebM · maximum 200 MB"}</small>
+              </label>
+            ) : (
+              <label className="training-youtube-field"><span>YouTube link</span><div><i>▶</i><input name="youtubeUrl" type="url" placeholder="https://www.youtube.com/watch?v=…" required={uploadSource === "youtube"} autoComplete="off" disabled={uploadStatus === "preparing"} /></div><small>Supports youtube.com, youtu.be, Shorts, and Live links.</small></label>
+            )}
             <div className="training-upload-fields">
               <label><span>Title</span><input name="title" placeholder="e.g. How to record a non-conformance" required disabled={uploadStatus === "uploading" || uploadStatus === "preparing"} /></label>
               <label><span>Topic</span><select name="category" defaultValue="Quality" disabled={uploadStatus === "uploading" || uploadStatus === "preparing"}><option>Quality</option><option>Problem solving</option><option>Operations</option><option>Strategy</option><option>Leadership</option><option>Safety</option><option>Training</option></select></label>
               <label className="training-upload-wide"><span>Description</span><textarea name="description" rows={3} placeholder="What will people learn?" disabled={uploadStatus === "uploading" || uploadStatus === "preparing"} /></label>
               <label><span>Level</span><select name="level" defaultValue="Vivad learning" disabled={uploadStatus === "uploading" || uploadStatus === "preparing"}><option>Essential</option><option>Core skill</option><option>Leader practice</option><option>Vivad learning</option></select></label>
-              <label><span>Maximum duration</span><select name="maxDurationSeconds" defaultValue="3600" disabled={uploadStatus === "uploading" || uploadStatus === "preparing"}><option value="600">10 minutes</option><option value="1800">30 minutes</option><option value="3600">60 minutes</option><option value="7200">2 hours</option></select></label>
+              {uploadSource === "file" && <label><span>Maximum duration</span><select name="maxDurationSeconds" defaultValue="3600" disabled={uploadStatus === "uploading" || uploadStatus === "preparing"}><option value="600">10 minutes</option><option value="1800">30 minutes</option><option value="3600">60 minutes</option><option value="7200">2 hours</option></select></label>}
             </div>
-            {uploadStatus !== "idle" && <div className={`training-upload-status ${uploadStatus}`}><div><span>{uploadStatus === "processing" ? "✓" : uploadStatus === "error" ? "!" : "↑"}</span><p><strong>{uploadStatus === "preparing" ? "Preparing upload" : uploadStatus === "uploading" ? `Uploading · ${uploadProgress}%` : uploadStatus === "processing" ? "Processing started" : "Upload needs attention"}</strong><small>{uploadMessage}</small></p></div>{uploadStatus === "uploading" && <div className="training-upload-progress"><i style={{ width: `${uploadProgress}%` }} /></div>}</div>}
-            <div className="stream-modal-actions"><small>MP4, MOV, WebM and other common video formats</small><button type="submit" disabled={uploadStatus === "preparing" || uploadStatus === "uploading"}>{uploadStatus === "preparing" ? "Preparing…" : uploadStatus === "uploading" ? `Uploading ${uploadProgress}%` : uploadStatus === "processing" ? "Upload another" : "Start upload"}</button></div>
+            {uploadStatus !== "idle" && <div className={`training-upload-status ${uploadStatus}`}><div><span>{uploadStatus === "processing" ? "✓" : uploadStatus === "error" ? "!" : "↑"}</span><p><strong>{uploadStatus === "preparing" ? "Preparing upload" : uploadStatus === "uploading" ? `Uploading · ${uploadProgress}%` : uploadStatus === "processing" ? uploadSource === "youtube" ? "YouTube module added" : "Processing started" : "Upload needs attention"}</strong><small>{uploadMessage}</small></p></div>{uploadStatus === "uploading" && <div className="training-upload-progress"><i style={{ width: `${uploadProgress}%` }} /></div>}</div>}
+            <div className="stream-modal-actions"><small>{uploadSource === "file" ? "Cloudflare Stream direct upload" : "Official YouTube privacy-enhanced embed · saved on this device"}</small><button type="submit" disabled={uploadStatus === "preparing" || uploadStatus === "uploading"}>{uploadStatus === "preparing" ? "Preparing…" : uploadStatus === "uploading" ? `Uploading ${uploadProgress}%` : uploadSource === "youtube" ? uploadStatus === "processing" ? "Add another link" : "Add YouTube video" : uploadStatus === "processing" ? "Upload another" : "Start upload"}</button></div>
           </form>
         </div>
       )}
