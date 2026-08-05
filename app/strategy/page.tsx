@@ -190,7 +190,12 @@ export default function Home() {
             <article className="card north-star">
               <div className="card-heading">
                 <div>
-                  <span className="section-kicker red">True north</span>
+                  <span className="section-kicker true-north-label">
+                    <span className="north-compass" aria-hidden="true">
+                      <i />
+                    </span>
+                    True north
+                  </span>
                   <h2>Make progress visible.<br />Make action inevitable.</h2>
                 </div>
                 <div className="confidence">
