@@ -117,6 +117,52 @@ button { cursor: pointer; }
   text-transform: uppercase;
 }
 .section-kicker.red { color: var(--red); }
+.true-north-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--blue-dark);
+}
+.north-compass {
+  position: relative;
+  width: 17px;
+  height: 17px;
+  flex: 0 0 17px;
+  border: 1.5px solid var(--red);
+  border-radius: 50%;
+}
+.north-compass::before {
+  content: "N";
+  position: absolute;
+  top: -9px;
+  left: 50%;
+  padding: 0 2px;
+  background: var(--card);
+  color: var(--red);
+  font-size: 6px;
+  line-height: 1;
+  transform: translateX(-50%);
+}
+.north-compass i {
+  position: absolute;
+  top: 2px;
+  left: 50%;
+  width: 0;
+  height: 0;
+  border-right: 3.5px solid transparent;
+  border-bottom: 8px solid var(--red);
+  border-left: 3.5px solid transparent;
+  transform: translateX(-50%);
+}
+.north-compass i::after {
+  content: "";
+  position: absolute;
+  top: 8px;
+  left: -1.5px;
+  width: 3px;
+  height: 4px;
+  background: var(--red);
+}
 h1, h2, h3 { margin: 0; color: var(--grey); font-family: "Cabin", "Open Sans", sans-serif; }
 .topbar h1 { margin-top: 5px; font-size: 30px; line-height: 1.05; }
 .top-actions { display: flex; align-items: center; gap: 10px; }
