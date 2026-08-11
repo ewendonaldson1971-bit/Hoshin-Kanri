@@ -1,5 +1,4 @@
 import { NextResponse } from "next/server";
-import { authEnv, getHoshinSessionUsername } from "../../../../lib/auth/hoshin-auth";
 
 type UploadRequest = {
   title?: string;
@@ -20,17 +19,6 @@ function clean(value: unknown, maxLength: number) {
 }
 
 export async function POST(request: Request) {
-  const username = await getHoshinSessionUsername(
-    request.headers.get("cookie") ?? "",
-    authEnv(),
-  );
-  if (!username) {
-    return NextResponse.json(
-      { error: "Sign in with your Lotus credentials to upload videos.", loginUrl: "/hoshin-login?return_to=/training" },
-      { status: 401 },
-    );
-  }
-
   const accountId = process.env.CLOUDFLARE_ACCOUNT_ID?.trim() ?? "";
   const apiToken =
     process.env.CLOUDFLARE_STREAM_API_TOKEN?.trim() ??
@@ -89,7 +77,7 @@ export async function POST(request: Request) {
         body: JSON.stringify({
           maxDurationSeconds,
           allowedOrigins,
-          creator: username,
+          creator: "Vivad contributor",
           expiry: new Date(Date.now() + 15 * 60 * 1000).toISOString(),
           requireSignedURLs: false,
           thumbnailTimestampPct: 0.2,
@@ -98,7 +86,7 @@ export async function POST(request: Request) {
             description: clean(body.description, 500),
             category: clean(body.category, 60) || "Training",
             level: clean(body.level, 60) || "Vivad learning",
-            owner: username,
+            owner: "Vivad",
             source: "Hoshin Training Academy",
           },
         }),

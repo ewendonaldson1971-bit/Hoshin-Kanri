@@ -48,12 +48,6 @@ type StreamConfig = {
   videoIds: Record<string, string>;
 };
 
-type AuthSession = {
-  authenticated: boolean;
-  username: string;
-  configured: boolean;
-};
-
 type StreamPlayer = {
   addEventListener: (event: string, callback: () => void) => void;
 };
@@ -186,7 +180,6 @@ export default function TrainingPage() {
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [dragActive, setDragActive] = useState(false);
   const [youtubeCourses, setYoutubeCourses] = useState<Course[]>([]);
-  const [session, setSession] = useState<AuthSession>({ authenticated: false, username: "", configured: true });
   const [library, setLibrary] = useState<StreamLibraryResponse>({ connected: false, videos: [] });
   const [libraryLoading, setLibraryLoading] = useState(true);
   const [config, setConfig] = useState<StreamConfig>({
@@ -253,10 +246,6 @@ export default function TrainingPage() {
 
   useEffect(() => {
     void refreshLibrary();
-    void fetch("/api/auth/session", { cache: "no-store" })
-      .then((response) => response.json())
-      .then((payload: AuthSession) => setSession(payload))
-      .catch(() => setSession({ authenticated: false, username: "", configured: false }));
   }, [refreshLibrary]);
 
   const libraryCourses = useMemo<Course[]>(() => {
@@ -365,7 +354,7 @@ export default function TrainingPage() {
         category: String(form.get("category") ?? "Training"),
         duration: "YouTube",
         level: String(form.get("level") ?? "Vivad learning"),
-        owner: session.username || "Vivad",
+        owner: "Vivad",
         accent: "red",
         videoUid: "",
         source: "youtube",
@@ -412,11 +401,7 @@ export default function TrainingPage() {
           maxDurationSeconds: Number(form.get("maxDurationSeconds") ?? 3_600),
         }),
       });
-      const payload = (await response.json()) as { uploadURL?: string; error?: string; missing?: string[]; loginUrl?: string };
-      if (response.status === 401 && payload.loginUrl) {
-        window.location.assign(payload.loginUrl);
-        return;
-      }
+      const payload = (await response.json()) as { uploadURL?: string; error?: string; missing?: string[] };
       if (!response.ok || !payload.uploadURL) {
         const missing = payload.missing?.length ? ` Add ${payload.missing.join(", ")} to the deployment environment.` : "";
         throw new Error(`${payload.error || "The upload could not be prepared."}${missing}`);
@@ -513,8 +498,7 @@ export default function TrainingPage() {
             <p>Short, practical learning that connects quality, problem solving, and strategy to the work.</p>
           </div>
           <div className="training-top-actions">
-            {session.authenticated && <span className="training-signed-in">Signed in as <strong>{session.username}</strong> · <a href="/hoshin-logout">Sign out</a></span>}
-            <button className="training-upload-button" type="button" onClick={() => { if (!session.authenticated) { window.location.assign("/hoshin-login?return_to=/training"); return; } openUploader(); }}><span>＋</span> {session.authenticated ? "Add video" : "Sign in to add video"}</button>
+            <button className="training-upload-button" type="button" onClick={openUploader}><span>＋</span> Add new video</button>
             <button className="stream-config-button" type="button" onClick={() => setConfigOpen(true)}>
               <span className={library.connected || config.customerCode ? "connected" : ""} />
               {libraryLoading ? "Checking Stream…" : library.connected ? `${library.videos.length} Stream videos` : config.customerCode ? "Stream connected" : "Configure Stream"}
