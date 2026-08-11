@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 type QualityEvent = {
   id: string;
@@ -78,11 +78,13 @@ export default function QualityPage() {
   const [data, setData] = useState<QualityResponse>({ events: [] });
   const [loading, setLoading] = useState(true);
   const [query, setQuery] = useState("");
-  const [status, setStatus] = useState("All statuses");
+  const [selectedStatuses, setSelectedStatuses] = useState<string[]>([]);
+  const [statusMenuOpen, setStatusMenuOpen] = useState(false);
   const [category, setCategory] = useState("All categories");
   const [department, setDepartment] = useState("All departments");
   const [selected, setSelected] = useState<QualityEvent | null>(null);
   const [training, setTraining] = useState<TrainingResponse>({ videos: [] });
+  const statusFilterRef = useRef<HTMLDivElement>(null);
 
   const loadEvents = useCallback(async () => {
     setLoading(true);
@@ -123,6 +125,25 @@ export default function QualityPage() {
     void loadEvents();
     void loadTraining();
   }, [loadEvents, loadTraining]);
+
+  useEffect(() => {
+    function closeStatusMenu(event: MouseEvent) {
+      if (!statusFilterRef.current?.contains(event.target as Node)) {
+        setStatusMenuOpen(false);
+      }
+    }
+
+    function closeStatusMenuWithEscape(event: KeyboardEvent) {
+      if (event.key === "Escape") setStatusMenuOpen(false);
+    }
+
+    document.addEventListener("mousedown", closeStatusMenu);
+    document.addEventListener("keydown", closeStatusMenuWithEscape);
+    return () => {
+      document.removeEventListener("mousedown", closeStatusMenu);
+      document.removeEventListener("keydown", closeStatusMenuWithEscape);
+    };
+  }, []);
 
   const recentVideos = useMemo(() => {
     const weekAgo = Date.now() - 7 * 24 * 60 * 60 * 1000;
@@ -180,13 +201,14 @@ export default function QualityPage() {
           event.reportedBy,
           event.rootCause,
         ].some((value) => value.toLowerCase().includes(needle));
-      const matchesStatus = status === "All statuses" || event.status === status;
+      const matchesStatus =
+        selectedStatuses.length === 0 || selectedStatuses.includes(event.status);
       const matchesCategory = category === "All categories" || event.category === category;
       const matchesDepartment =
         department === "All departments" || titleCase(event.department) === department;
       return matchesQuery && matchesStatus && matchesCategory && matchesDepartment;
     });
-  }, [category, department, query, sortedEvents, status]);
+  }, [category, department, query, selectedStatuses, sortedEvents]);
 
   const summary = useMemo(() => {
     const total = data.events.length;
@@ -244,10 +266,26 @@ export default function QualityPage() {
 
   function resetFilters() {
     setQuery("");
-    setStatus("All statuses");
+    setSelectedStatuses([]);
+    setStatusMenuOpen(false);
     setCategory("All categories");
     setDepartment("All departments");
   }
+
+  function toggleStatus(value: string) {
+    setSelectedStatuses((current) =>
+      current.includes(value)
+        ? current.filter((item) => item !== value)
+        : [...current, value],
+    );
+  }
+
+  const statusFilterLabel =
+    selectedStatuses.length === 0
+      ? "All statuses"
+      : selectedStatuses.length === 1
+        ? selectedStatuses[0]
+        : `${selectedStatuses.length} statuses`;
 
   return (
     <div className="quality-shell">
@@ -372,7 +410,7 @@ export default function QualityPage() {
             </div>
             <div className="action-number"><strong>{summary.highSeverity}</strong><span>high-severity events remain open</span></div>
             <p>Start with events that combine elevated severity with an incomplete status, then confirm an owner and remedial action.</p>
-            <button type="button" onClick={() => { setStatus("Open / unclassified"); document.querySelector("#event-log")?.scrollIntoView(); }}>
+            <button type="button" onClick={() => { setSelectedStatuses(["Open / unclassified"]); document.querySelector("#event-log")?.scrollIntoView(); }}>
               Review open events <span>↓</span>
             </button>
           </article>
@@ -398,10 +436,40 @@ export default function QualityPage() {
                 aria-label="Search quality events"
               />
             </label>
-            <select value={status} onChange={(event) => setStatus(event.target.value)} aria-label="Filter by status">
-              <option>All statuses</option>
-              {statuses.map((item) => <option key={item}>{item}</option>)}
-            </select>
+            <div className="status-multiselect" ref={statusFilterRef}>
+              <button
+                className="status-multiselect-trigger"
+                type="button"
+                aria-haspopup="true"
+                aria-expanded={statusMenuOpen}
+                onClick={() => setStatusMenuOpen((open) => !open)}
+              >
+                <span>{statusFilterLabel}</span>
+                <i aria-hidden="true">⌄</i>
+              </button>
+              {statusMenuOpen && (
+                <div className="status-multiselect-menu" role="group" aria-label="Filter by status">
+                  <label className={selectedStatuses.length === 0 ? "selected" : ""}>
+                    <input
+                      type="checkbox"
+                      checked={selectedStatuses.length === 0}
+                      onChange={() => setSelectedStatuses([])}
+                    />
+                    <span>All statuses</span>
+                  </label>
+                  {statuses.map((item) => (
+                    <label className={selectedStatuses.includes(item) ? "selected" : ""} key={item}>
+                      <input
+                        type="checkbox"
+                        checked={selectedStatuses.includes(item)}
+                        onChange={() => toggleStatus(item)}
+                      />
+                      <span>{item}</span>
+                    </label>
+                  ))}
+                </div>
+              )}
+            </div>
             <select value={category} onChange={(event) => setCategory(event.target.value)} aria-label="Filter by category">
               <option>All categories</option>
               {categories.map((item) => <option key={item}>{item}</option>)}
@@ -410,7 +478,7 @@ export default function QualityPage() {
               <option>All departments</option>
               {departments.map((item) => <option key={item}>{item}</option>)}
             </select>
-            {(query || status !== "All statuses" || category !== "All categories" || department !== "All departments") && (
+            {(query || selectedStatuses.length > 0 || category !== "All categories" || department !== "All departments") && (
               <button className="clear-filters" type="button" onClick={resetFilters}>Clear</button>
             )}
           </div>

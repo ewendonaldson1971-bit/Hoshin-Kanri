@@ -926,6 +926,60 @@ select:focus, input:focus { border-color: var(--blue); box-shadow: 0 0 0 3px rgb
 .quality-search > span { color: #a1a5ab; font-size: 18px; }
 .quality-search input { width: 100%; border: 0; outline: 0; background: transparent; color: var(--grey); font-size: 10px; }
 .quality-filters select { min-height: 36px; max-width: 180px; padding-left: 12px; font-size: 9px; }
+.status-multiselect { position: relative; min-width: 154px; }
+.status-multiselect-trigger {
+  width: 100%;
+  min-height: 36px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 0 12px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: #fff;
+  color: var(--grey);
+  font-size: 9px;
+  text-align: left;
+}
+.status-multiselect-trigger:hover { border-color: #b9c9dc; }
+.status-multiselect-trigger:focus-visible,
+.status-multiselect-trigger[aria-expanded="true"] {
+  border-color: var(--blue);
+  box-shadow: 0 0 0 3px rgba(71,143,225,.14);
+  outline: none;
+}
+.status-multiselect-trigger i { color: #777c82; font-size: 13px; font-style: normal; }
+.status-multiselect-menu {
+  position: absolute;
+  top: calc(100% + 7px);
+  left: 0;
+  z-index: 20;
+  width: max-content;
+  min-width: 190px;
+  max-height: 260px;
+  overflow-y: auto;
+  padding: 6px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: #fff;
+  box-shadow: 0 12px 28px rgba(35,49,63,.16);
+}
+.status-multiselect-menu label {
+  min-height: 34px;
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  padding: 0 9px;
+  border-radius: 7px;
+  color: #666b72;
+  cursor: pointer;
+  font-size: 9px;
+  white-space: nowrap;
+}
+.status-multiselect-menu label:hover,
+.status-multiselect-menu label.selected { background: var(--soft-blue); color: var(--blue-dark); }
+.status-multiselect-menu input { width: 14px; height: 14px; accent-color: var(--blue); }
 .clear-filters { border: 0; background: transparent; color: var(--red); font-size: 9px; font-weight: 700; }
 .quality-table-wrap { width: 100%; overflow-x: auto; }
 .quality-table { width: 100%; border-collapse: collapse; table-layout: fixed; }
@@ -1055,6 +1109,8 @@ select:focus, input:focus { border-color: var(--blue); box-shadow: 0 0 0 3px rgb
   .quality-log-heading > a { padding-inline: 10px; }
   .quality-search { width: 100%; min-width: 0; }
   .quality-filters select { flex: 1 1 calc(50% - 8px); max-width: none; }
+  .status-multiselect { flex: 1 1 calc(50% - 8px); }
+  .status-multiselect-menu { width: 100%; min-width: 210px; }
   .quality-drawer { padding: 20px; }
 }
 
