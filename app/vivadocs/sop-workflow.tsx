@@ -78,7 +78,16 @@ export function SopWorkflow({ onClose }: { onClose(): void }) {
   }
 
   function addStep() {
-    setEditor((current) => ({ ...current, steps: [...current.steps, { ...blankStep(), position: current.steps.length + 1 }] })); setDirty(true);
+    const nextIndex = editor.steps.length;
+    setEditor((current) => ({ ...current, steps: [...current.steps, { ...blankStep(), position: current.steps.length + 1 }] }));
+    setErrors([]);
+    setDirty(true);
+    window.setTimeout(() => {
+      const cards = document.querySelectorAll<HTMLElement>(".sop-step-card");
+      const nextCard = cards[nextIndex];
+      nextCard?.scrollIntoView({ behavior: "smooth", block: "start" });
+      nextCard?.querySelector<HTMLTextAreaElement>("textarea")?.focus({ preventScroll: true });
+    }, 0);
   }
 
   function moveStep(index: number, direction: -1 | 1) {
@@ -95,7 +104,8 @@ export function SopWorkflow({ onClose }: { onClose(): void }) {
     if (editor.steps.length === 1) { setErrors(["An SOP needs at least one step."]); return; }
     if ((step.instruction || step.file || step.existingImageKey) && !window.confirm(`Delete Step ${index + 1} and its content?`)) return;
     if (step.previewUrl) URL.revokeObjectURL(step.previewUrl);
-    setEditor((current) => ({ ...current, steps: current.steps.filter((_, position) => position !== index).map((item, position) => ({ ...item, position: position + 1 })) })); setDirty(true);
+    setEditor((current) => ({ ...current, steps: current.steps.filter((_, position) => position !== index).map((item, position) => ({ ...item, position: position + 1 })) }));
+    setDirty(true);
   }
 
   function chooseImage(index: number, event: ChangeEvent<HTMLInputElement>) {

@@ -199,6 +199,10 @@ test("VivaDocs provides durable SOP creation, media and PDF workflows without QR
   assert.match(hosting, /"r2": "SOP_ASSETS"/);
 
   assert.match(workflow, /Add Next Step/);
+  assert.match(workflow, /position: current\.steps\.length \+ 1/);
+  assert.match(workflow, /const nextCard = cards\[nextIndex\]/);
+  assert.match(workflow, /nextCard\?\.scrollIntoView/);
+  assert.match(workflow, /querySelector<HTMLTextAreaElement>\("textarea"\)\?\.focus/);
   assert.match(workflow, /Move Step \$\{index \+ 1\} up/);
   assert.match(workflow, /Delete Step \$\{index \+ 1\}/);
   assert.match(workflow, /window\.confirm\(`Delete Step/);
