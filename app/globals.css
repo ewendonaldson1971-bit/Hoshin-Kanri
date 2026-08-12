@@ -1457,3 +1457,69 @@ select:focus, input:focus { border-color: var(--blue); box-shadow: 0 0 0 3px rgb
   .audit-table > div { grid-template-columns: 1fr auto; }.audit-table > div > :nth-child(2), .audit-table > div > :nth-child(3) { display: none; }
   .vivadocs-toast { right: 14px; bottom: 14px; left: 14px; }
 }
+
+/* Shared responsive workspace navigation */
+.mobile-workspace-navigation { display: none; }
+.mobile-drawer-layer { position: fixed; inset: 0; z-index: 1000; }
+.mobile-drawer-backdrop { position: absolute; inset: 0; width: 100%; height: 100%; padding: 0; border: 0; background: rgba(26,31,36,.58); animation: fade-in .18s ease; }
+.mobile-workspace-drawer {
+  position: absolute;
+  inset: 0 auto 0 0;
+  width: min(86vw, 330px);
+  height: 100dvh;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  padding: env(safe-area-inset-top, 0) 14px env(safe-area-inset-bottom, 0);
+  background: #fff;
+  box-shadow: 18px 0 48px rgba(24,29,34,.22);
+  animation: mobile-drawer-in .22s ease;
+}
+@keyframes mobile-drawer-in { from { transform: translateX(-100%); } }
+.mobile-workspace-drawer > header { min-height: 84px; display: flex; align-items: center; justify-content: space-between; gap: 14px; flex: 0 0 auto; border-bottom: 1px solid #eceef1; }
+.mobile-workspace-drawer > header a { min-width: 0; display: block; }
+.mobile-workspace-drawer > header img { width: 185px; max-width: 100%; height: auto; display: block; }
+.mobile-workspace-drawer > header button { width: 46px; height: 46px; display: grid; place-items: center; flex: 0 0 auto; border: 1px solid var(--line); border-radius: 50%; background: #fff; color: #656a70; font-size: 25px; line-height: 1; }
+.mobile-workspace-drawer > nav { min-height: 0; flex: 1; overflow-y: auto; overscroll-behavior: contain; padding: 12px 0 20px; scrollbar-width: thin; }
+.mobile-navigation-group { display: grid; gap: 4px; }
+.mobile-navigation-group + .mobile-navigation-group { margin-top: 23px; }
+.mobile-navigation-group > span { margin: 4px 12px 7px; color: #969ba1; font-size: 9px; font-weight: 700; letter-spacing: 1.2px; text-transform: uppercase; }
+.mobile-navigation-group > a { position: relative; min-height: 50px; display: flex; align-items: center; gap: 13px; padding: 0 13px; border-radius: 8px; color: #5f646b; font-size: 14px; font-weight: 600; text-decoration: none; -webkit-tap-highlight-color: transparent; }
+.mobile-navigation-group > a:hover { background: #f6f8fa; color: #30353a; }
+.mobile-navigation-group > a.active { background: var(--soft-blue); color: var(--blue-dark); }
+.mobile-navigation-group > a.active::before { content: ""; position: absolute; top: 10px; bottom: 10px; left: -14px; width: 3px; border-radius: 0 3px 3px 0; background: var(--blue); }
+.mobile-navigation-group > a > i { width: 23px; color: currentColor; font-size: 20px; font-style: normal; text-align: center; }
+.mobile-navigation-group > a > b { min-width: 25px; margin-left: auto; padding: 3px 7px; border-radius: 99px; background: #fff; color: var(--blue); font-size: 10px; text-align: center; }
+.mobile-workspace-drawer > footer { min-height: 72px; display: flex; align-items: center; gap: 10px; flex: 0 0 auto; padding: 10px 5px calc(10px + env(safe-area-inset-bottom, 0)); border-top: 1px solid #eceef1; }
+.mobile-workspace-drawer > footer > span { width: 38px; height: 38px; display: grid; place-items: center; border-radius: 50%; background: #495159; color: #fff; font-size: 10px; font-weight: 700; }
+.mobile-workspace-drawer > footer strong, .mobile-workspace-drawer > footer small { display: block; }
+.mobile-workspace-drawer > footer strong { color: #50555b; font-size: 10px; }.mobile-workspace-drawer > footer small { margin-top: 3px; color: #92979d; font-size: 8px; }
+.mobile-menu-button:focus-visible, .mobile-workspace-drawer button:focus-visible, .mobile-workspace-drawer a:focus-visible { outline: 3px solid rgba(71,143,225,.42); outline-offset: 2px; }
+
+@media (max-width: 700px) {
+  .mobile-workspace-navigation { display: block; }
+  .mobile-menu-button { min-width: 48px; min-height: 44px; display: inline-flex; align-items: center; justify-content: center; gap: 8px; padding: 0 13px; border: 1px solid #dce0e4; border-radius: 99px; background: #fff; color: #4f555b; font-size: 10px; font-weight: 700; box-shadow: 0 4px 12px rgba(35,41,48,.06); }
+  .mobile-menu-button > i { width: 17px; display: grid; gap: 3px; }
+  .mobile-menu-button > i > span { width: 17px; height: 2px; display: block; border-radius: 2px; background: currentColor; }
+
+  .sidebar, .quality-sidebar, .training-sidebar, .vivadocs-sidebar { display: none; }
+  .main, .quality-main, .training-main, .vivadocs-main { margin-left: 0; }
+  .main { margin: 0; padding: 0 16px 36px; }
+  .quality-main, .training-main, .vivadocs-main { padding-inline: 14px; }
+  .topbar, .quality-topbar, .training-topbar, .vivadocs-topbar { position: relative; }
+  .topbar > .mobile-workspace-navigation, .quality-topbar > .mobile-workspace-navigation, .training-topbar > .mobile-workspace-navigation, .vivadocs-topbar > .mobile-workspace-navigation { position: absolute; top: 22px; right: 0; z-index: 2; }
+  .topbar { min-height: 145px; display: block; padding: 29px 0 22px; }
+  .topbar > div:nth-of-type(2) { padding-right: 92px; }
+  .quality-topbar, .training-topbar, .vivadocs-topbar { min-height: 175px; align-items: flex-start; flex-direction: column; padding: 29px 0 24px; }
+  .quality-topbar > div:nth-of-type(2), .training-topbar > div:nth-of-type(2), .vivadocs-topbar > div:nth-of-type(2) { padding-right: 92px; }
+  .home-header { grid-template-columns: minmax(0,1fr) auto; gap: 10px; padding-inline: 14px; }
+  .home-header .mobile-workspace-navigation { justify-self: end; }
+  .home-header .header-cta { display: none; }
+}
+
+@media (max-width: 380px) {
+  .mobile-menu-button { min-width: 44px; width: 44px; padding: 0; }
+  .mobile-menu-button > span { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); clip-path: inset(50%); }
+  .mobile-workspace-drawer { width: min(91vw, 330px); }
+  .vivadocs-metrics { grid-template-columns: 1fr; }
+}

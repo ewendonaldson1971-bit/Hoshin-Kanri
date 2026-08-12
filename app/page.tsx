@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { MobileWorkspaceNavigation } from "./components/workspace-navigation";
 
 const outcomes = [
   { value: "72%", label: "Plan confidence", detail: "+6% this quarter", tone: "green" },
@@ -39,6 +40,7 @@ export default function HomePage() {
           <Link href="/quality">Quality events</Link>
           <Link href="/training">Training</Link>
         </nav>
+        <MobileWorkspaceNavigation />
         <Link className="button button-primary header-cta" href="/strategy">
           Open workspace <span>→</span>
         </Link>

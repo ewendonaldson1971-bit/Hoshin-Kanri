@@ -2,9 +2,10 @@
 
 // Interactive strategy workspace.
 import Link from "next/link";
-import { FormEvent, useMemo, useState } from "react";
+import { FormEvent, useEffect, useMemo, useState } from "react";
+import { MobileWorkspaceNavigation, navigationItem, WorkspaceNavigationId } from "../components/workspace-navigation";
 
-type View = "Overview" | "X-matrix" | "Initiatives" | "Reviews";
+type View = "Overview" | "X-matrix" | "Scorecards" | "Initiatives" | "Reviews" | "People" | "Settings";
 
 type Initiative = {
   title: string;
@@ -64,6 +65,18 @@ export default function Home() {
     { title: "Skills matrix rollout", owner: "Ava Brooks", progress: 47, status: "On track", due: "28 Oct" },
   ]);
 
+  useEffect(() => {
+    const requested = new URLSearchParams(window.location.search).get("view") as View | null;
+    if (requested && ["Scorecards", "Initiatives", "Reviews", "People", "Settings"].includes(requested)) {
+      // Restore the directly linked workspace section after client hydration.
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      setView(requested);
+    }
+  }, []);
+
+  const activeNavigation: WorkspaceNavigationId =
+    view === "Scorecards" ? "scorecards" : view === "Initiatives" ? "initiatives" : view === "Reviews" ? "reviews" : view === "People" ? "people" : view === "Settings" ? "settings" : "strategy";
+
   const visibleInitiatives = useMemo(
     () => initiatives.filter((item) => filter === "All" || item.status === filter),
     [filter, initiatives],
@@ -95,35 +108,35 @@ export default function Home() {
 
         <nav className="side-nav" aria-label="Workspace navigation">
           <p className="nav-label">Workspace</p>
-          <button className="nav-item active" type="button">
+          <Link className={activeNavigation === "strategy" ? "nav-item active" : "nav-item"} href={navigationItem("strategy").href}>
             <span className="nav-icon">◫</span> Strategy
-          </button>
+          </Link>
           <Link className="nav-item" href="/quality">
             <span className="nav-icon">◇</span> Quality events
           </Link>
           <Link className="nav-item" href="/training">
             <span className="nav-icon">▷</span> Training academy
           </Link>
-          <button className="nav-item" type="button">
+          <Link className={activeNavigation === "scorecards" ? "nav-item active" : "nav-item"} href={navigationItem("scorecards").href}>
             <span className="nav-icon">◎</span> Scorecards
-          </button>
-          <button className="nav-item" type="button">
+          </Link>
+          <Link className={activeNavigation === "initiatives" ? "nav-item active" : "nav-item"} href={navigationItem("initiatives").href}>
             <span className="nav-icon">↗</span> Initiatives
             <span className="nav-count">4</span>
-          </button>
-          <button className="nav-item" type="button">
+          </Link>
+          <Link className={activeNavigation === "reviews" ? "nav-item active" : "nav-item"} href={navigationItem("reviews").href}>
             <span className="nav-icon">◷</span> Reviews
-          </button>
+          </Link>
           <Link className="nav-item" href="/vivadocs">
             <span className="nav-icon">▤</span> VivaDocs
           </Link>
           <p className="nav-label nav-label-spaced">Manage</p>
-          <button className="nav-item" type="button">
+          <Link className={activeNavigation === "people" ? "nav-item active" : "nav-item"} href={navigationItem("people").href}>
             <span className="nav-icon">♙</span> People
-          </button>
-          <button className="nav-item" type="button">
+          </Link>
+          <Link className={activeNavigation === "settings" ? "nav-item active" : "nav-item"} href={navigationItem("settings").href}>
             <span className="nav-icon">⚙</span> Settings
-          </button>
+          </Link>
         </nav>
 
         <div className="sidebar-footer">
@@ -147,6 +160,7 @@ export default function Home() {
 
       <main className="main" id="top">
         <header className="topbar">
+          <MobileWorkspaceNavigation activeItem={activeNavigation} />
           <div>
             <span className="eyebrow">FY2026 CORPORATE PLAN</span>
             <h1>Strategy deployment</h1>
@@ -305,6 +319,13 @@ export default function Home() {
           </section>
         )}
 
+        {view === "Scorecards" && (
+          <section className="single-view">
+            <div className="page-intro"><div><span className="section-kicker red">Outcome measures</span><h2>Corporate scorecards</h2></div><p>Current performance against the FY2026 measures.</p></div>
+            <div className="initiative-grid">{keyResults.map((result) => <article className="card initiative-card" key={result.metric}><span className={`status-pill ${result.status.toLowerCase().replace(" ", "-")}`}>{result.status}</span><h3>{result.metric}</h3><div className="activity-stat"><strong>{result.actual}</strong><span>Target<br />{result.target}</span></div><p className="due-row"><span>Trend</span><strong>{result.trend}</strong></p></article>)}</div>
+          </section>
+        )}
+
         {view === "Initiatives" && (
           <section className="single-view">
             <div className="page-intro">
@@ -356,6 +377,14 @@ export default function Home() {
               ))}
             </article>
           </section>
+        )}
+
+        {view === "People" && (
+          <section className="single-view"><div className="page-intro"><div><span className="section-kicker red">Accountability</span><h2>People and owners</h2></div><p>Outcome and initiative ownership across the strategy.</p></div><article className="card timeline-card">{["Maya Chen · Customer", "Liam Ward · Operations", "Noah Singh · People", "Ava Brooks · Capability"].map((person) => <div className="timeline-item" key={person}><span className="avatar small">{person.split(" ").slice(0,2).map((part) => part[0]).join("")}</span><div><strong>{person.split(" · ")[0]}</strong><small>{person.split(" · ")[1]} outcome owner</small></div><span className="status-pill on-track">Active</span></div>)}</article></section>
+        )}
+
+        {view === "Settings" && (
+          <section className="single-view"><div className="page-intro"><div><span className="section-kicker red">Workspace controls</span><h2>Strategy settings</h2></div><p>Planning period and review defaults for this workspace.</p></div><article className="card north-star"><div className="settings-grid"><label>Planning period<select defaultValue="FY2026"><option>FY2026</option><option>FY2025</option></select></label><label>Review cadence<select defaultValue="Monthly"><option>Monthly</option><option>Quarterly</option></select></label><label>Plan visibility<select defaultValue="All workspace members"><option>All workspace members</option><option>Leaders only</option></select></label></div></article></section>
         )}
       </main>
 

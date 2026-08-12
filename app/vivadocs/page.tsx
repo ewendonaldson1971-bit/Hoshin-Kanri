@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { FormEvent, useEffect, useMemo, useState } from "react";
+import { MobileWorkspaceNavigation, workspaceNavigationItems } from "../components/workspace-navigation";
 
 type Status = "Draft" | "In review" | "Approved" | "Published";
 type View = "Dashboard" | "SOP library" | "Approvals" | "Operator mode" | "Skills matrix" | "Audit log";
@@ -208,26 +209,22 @@ export default function VivaDocsPage() {
     setToast("Procedure completion recorded.");
   }
 
-  const workspaceItems: Array<[string, string, string]> = [
-    ["Strategy", "/strategy", "◫"], ["Quality events", "/quality", "◇"], ["Training academy", "/training", "▷"],
-    ["Scorecards", "#", "◎"], ["Initiatives", "#", "↗"], ["Reviews", "#", "◷"], ["VivaDocs", "/vivadocs", "▤"],
-  ];
-
   return (
     <div className="vivadocs-shell">
       <aside className="vivadocs-sidebar">
         <Link className="vivadocs-brand" href="/" aria-label="Vivad SPARK home"><img src="/vivad-logo.png" alt="Vivad SPARK — Hoshin, Continuous Improvement" /></Link>
         <nav aria-label="Workspace navigation">
           <span>Workspace</span>
-          {workspaceItems.map(([label, href, icon]) => <Link className={label === "VivaDocs" ? "active" : ""} href={href} key={label}><i>{icon}</i>{label}{label === "Initiatives" && <b>4</b>}</Link>)}
+          {workspaceNavigationItems.filter((item) => item.group === "Workspace").map((item) => <Link className={item.id === "vivadocs" ? "active" : ""} href={item.href} key={item.id}><i>{item.icon}</i>{item.label}{item.count && <b>{item.count}</b>}</Link>)}
           <span className="vivadocs-manage-label">Manage</span>
-          <a href="#"><i>♙</i>People</a><a href="#"><i>⚙</i>Settings</a>
+          {workspaceNavigationItems.filter((item) => item.group === "Manage").map((item) => <Link href={item.href} key={item.id}><i>{item.icon}</i>{item.label}</Link>)}
         </nav>
         <div className="vivadocs-profile"><span>RS</span><div><strong>Rubin Sekuleski</strong><small>Owner · Vivad</small></div><b>•••</b></div>
       </aside>
 
       <main className="vivadocs-main">
         <header className="vivadocs-topbar">
+          <MobileWorkspaceNavigation activeItem="vivadocs" />
           <div><span className="vivadocs-eyebrow">CONTROLLED WORK INSTRUCTIONS</span><h1>VivaDocs</h1><p>Build, approve and complete visual procedures with confidence.</p></div>
           <div className="vivadocs-top-actions"><button className="vivadocs-icon-button" type="button" aria-label="Notifications">♢<i /></button><button className="button button-primary" type="button" onClick={() => setCreateOpen(true)}>＋ New SOP</button></div>
         </header>

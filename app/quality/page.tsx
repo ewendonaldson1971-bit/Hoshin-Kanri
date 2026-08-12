@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { MobileWorkspaceNavigation, navigationItem } from "../components/workspace-navigation";
 
 type QualityEvent = {
   id: string;
@@ -297,10 +298,10 @@ export default function QualityPage() {
         </Link>
         <nav aria-label="Vivad workspace">
           <span className="quality-nav-label">Workspace</span>
-          <Link href="/strategy"><i>◎</i> Strategy</Link>
-          <Link className="active" href="/quality"><i>◇</i> Quality events</Link>
-          <Link href="/training"><i>▷</i> Training academy</Link>
-          <Link href="/vivadocs"><i>▤</i> VivaDocs</Link>
+          <Link href={navigationItem("strategy").href}><i>{navigationItem("strategy").icon}</i> {navigationItem("strategy").label}</Link>
+          <Link className="active" href={navigationItem("quality").href}><i>{navigationItem("quality").icon}</i> {navigationItem("quality").label}</Link>
+          <Link href={navigationItem("training").href}><i>{navigationItem("training").icon}</i> {navigationItem("training").label}</Link>
+          <Link href={navigationItem("vivadocs").href}><i>{navigationItem("vivadocs").icon}</i> {navigationItem("vivadocs").label}</Link>
           <a href="#trends"><i>↗</i> Trends</a>
           <a href="#event-log"><i>☷</i> Event log</a>
         </nav>
@@ -314,6 +315,7 @@ export default function QualityPage() {
 
       <main className="quality-main">
         <header className="quality-topbar">
+          <MobileWorkspaceNavigation activeItem="quality" />
           <div>
             <span className="quality-eyebrow">VIVAD QUALITY SYSTEM</span>
             <h1>Non-Conformance Events</h1>
