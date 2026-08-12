@@ -1,5 +1,37 @@
 # vinext-starter
 
+## Vivad SPARK workspace
+
+The application combines strategy deployment, quality-event reporting, video
+training, and **VivaDocs** visual work instructions. VivaDocs is available at
+`/vivadocs` and includes a dashboard, searchable SOP library, controlled status
+transitions, an approval queue, a touch-friendly operator player, a skills
+matrix, and an append-only activity view.
+
+The demonstration workspace is intentionally self-contained. Seeded SOPs and
+competency records make the module explorable immediately, while SOPs created
+or progressed in the interface persist in the current browser with
+`localStorage`. This is a front-end product slice; production rollout should
+replace the local adapter with tenant-isolated database, identity, media-storage,
+and server-side authorisation adapters.
+
+### VivaDocs architecture and assumptions
+
+- `app/vivadocs/page.tsx` owns the interactive module and demonstration records.
+- `app/globals.css` contains the responsive Vivad SPARK design system.
+- Document states follow Draft → In review → Approved → Published.
+- Published SOPs can be completed step-by-step and create a local audit event.
+- The current user is represented by the seeded owner profile for demonstration.
+
+### Threat model
+
+The demonstration stores no secrets or sensitive production records. Browser
+storage is user-controlled and must not be treated as an authorisation boundary.
+Before real deployment, enforce organisation membership and role checks on every
+server operation, validate uploads by content and size, use signed media URLs,
+protect mutations against CSRF and abuse, make published revisions immutable in
+database transactions, and retain audit events in append-only server storage.
+
 A clean full-stack starter running on
 [vinext](https://github.com/cloudflare/vinext), with optional Cloudflare D1 and
 Drizzle support.

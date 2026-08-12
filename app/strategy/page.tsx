@@ -114,6 +114,9 @@ export default function Home() {
           <button className="nav-item" type="button">
             <span className="nav-icon">◷</span> Reviews
           </button>
+          <Link className="nav-item" href="/vivadocs">
+            <span className="nav-icon">▤</span> VivaDocs
+          </Link>
           <p className="nav-label nav-label-spaced">Manage</p>
           <button className="nav-item" type="button">
             <span className="nav-icon">♙</span> People
