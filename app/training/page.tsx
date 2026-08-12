@@ -474,8 +474,8 @@ export default function TrainingPage() {
   return (
     <div className="training-shell">
       <aside className="training-sidebar">
-        <Link className="training-brand" href="/" aria-label="Vivad home">
-          <img src="/vivad-logo.png" alt="Vivad" />
+        <Link className="training-brand" href="/" aria-label="Vivad SPARK home">
+          <img src="/vivad-logo.png" alt="Vivad SPARK — Hoshin, Continuous Improvement" />
         </Link>
         <nav aria-label="Vivad workspace">
           <span>Workspace</span>

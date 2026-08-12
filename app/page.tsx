@@ -29,8 +29,8 @@ export default function HomePage() {
   return (
     <div className="home-page">
       <header className="home-header">
-        <Link className="brand home-brand" href="/" aria-label="Vivad home">
-          <img className="vivad-logo" src="/vivad-logo.png" alt="Vivad" />
+        <Link className="brand home-brand" href="/" aria-label="Vivad SPARK home">
+          <img className="vivad-logo" src="/vivad-logo.png" alt="Vivad SPARK — Hoshin, Continuous Improvement" />
         </Link>
         <nav className="home-nav" aria-label="Home navigation">
           <a href="#system">The system</a>
@@ -185,8 +185,8 @@ export default function HomePage() {
       </main>
 
       <footer className="home-footer">
-        <Link className="brand home-brand" href="/" aria-label="Vivad home">
-          <img className="vivad-logo footer-vivad-logo" src="/vivad-logo.png" alt="Vivad" />
+        <Link className="brand home-brand" href="/" aria-label="Vivad SPARK home">
+          <img className="vivad-logo footer-vivad-logo" src="/vivad-logo.png" alt="Vivad SPARK — Hoshin, Continuous Improvement" />
         </Link>
         <p>Strategy deployment for teams that value clarity, learning, and action.</p>
         <span>FY2026 · Corporate strategy</span>
