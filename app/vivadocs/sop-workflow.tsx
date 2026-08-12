@@ -1,7 +1,6 @@
 "use client";
 
-import QRCode from "qrcode";
-import { ChangeEvent, useEffect, useMemo, useRef, useState } from "react";
+import { ChangeEvent, useEffect, useRef, useState } from "react";
 import { SOP_DEPARTMENTS, SopInput, StoredSop, departmentPrefix, safeFileName } from "../../lib/vivadocs-model";
 
 type EditorStep = StoredSop["steps"][number] & { file?: File; previewUrl?: string };
@@ -17,7 +16,6 @@ export function SopWorkflow({ onClose }: { onClose(): void }) {
   const [editor, setEditor] = useState<EditorState>(blankEditor);
   const [saved, setSaved] = useState<StoredSop | null>(null);
   const [library, setLibrary] = useState<SopSummary[]>([]);
-  const [qrUrl, setQrUrl] = useState("");
   const [busy, setBusy] = useState(false);
   const [loading, setLoading] = useState(true);
   const [dirty, setDirty] = useState(false);
@@ -25,18 +23,10 @@ export function SopWorkflow({ onClose }: { onClose(): void }) {
   const [errors, setErrors] = useState<string[]>([]);
   const original = useRef("");
 
-  const canonicalUrl = useMemo(() => saved && typeof window !== "undefined" ? `${window.location.origin}/vivadocs?sop=${encodeURIComponent(saved.id)}` : "", [saved]);
-
   useEffect(() => {
     const id = new URLSearchParams(window.location.search).get("sop");
     Promise.all([loadLibrary(), id ? loadSop(id) : Promise.resolve()]).finally(() => setLoading(false));
   }, []);
-
-  useEffect(() => {
-    if (!canonicalUrl) return;
-    QRCode.toDataURL(canonicalUrl, { width: 260, margin: 1, errorCorrectionLevel: "M", color: { dark: "#363b40", light: "#ffffff" } })
-      .then(setQrUrl).catch(() => setMessage("The QR code could not be generated."));
-  }, [canonicalUrl]);
 
   useEffect(() => {
     const warn = (event: BeforeUnloadEvent) => { if (!dirty) return; event.preventDefault(); event.returnValue = ""; };
@@ -150,13 +140,8 @@ export function SopWorkflow({ onClose }: { onClose(): void }) {
     window.history.replaceState({}, "", "/vivadocs"); onClose();
   }
 
-  async function downloadQr() {
-    if (!saved || !qrUrl) return;
-    downloadData(qrUrl, `${safeFileName(saved.reference, saved.title)}-qr.png`);
-  }
-
   async function downloadPdf() {
-    if (!saved || !qrUrl) return;
+    if (!saved) return;
     setBusy(true); setMessage("Generating print-ready PDF…");
     try {
       const { jsPDF } = await import("jspdf");
@@ -165,7 +150,7 @@ export function SopWorkflow({ onClose }: { onClose(): void }) {
       const addHeader = () => { pdf.setFont("helvetica", "bold"); pdf.setTextColor(228, 0, 43); pdf.setFontSize(11); pdf.text("VIVADOCS", margin, y); pdf.setTextColor(61, 66, 72); pdf.setFontSize(8); pdf.text(saved.reference, 193, y, { align: "right" }); y += 9; pdf.setDrawColor(220); pdf.line(margin, y, 193, y); y += 9; };
       const pageBreak = (height: number) => { if (y + height <= pageHeight - 18) return; pdf.addPage(); y = 17; addHeader(); };
       addHeader(); pdf.setFontSize(20); pdf.setTextColor(61, 66, 72); pdf.text(saved.title, margin, y, { maxWidth: 130 });
-      pdf.addImage(qrUrl, "PNG", 158, y - 3, 35, 35); y += 24;
+      y += 24;
       pdf.setFontSize(9); pdf.setFont("helvetica", "normal");
       const metadata = [`Department: ${saved.department}`, `Version: ${saved.version}`, `Owner: ${saved.author}`, `Created: ${formatDate(saved.createdDate)}`, saved.reviewDate ? `Review / approval: ${formatDate(saved.reviewDate)}` : ""];
       metadata.filter(Boolean).forEach((line) => { pdf.text(line, margin, y); y += 5; }); y += 5;
@@ -178,7 +163,7 @@ export function SopWorkflow({ onClose }: { onClose(): void }) {
           if (step.imageCaption) { pdf.setFontSize(8); pdf.setTextColor(100); const caption = pdf.splitTextToSize(step.imageCaption, width); pdf.text(caption, margin, y); y += caption.length * 4 + 5; }
         } y += 6;
       }
-      const pages = pdf.getNumberOfPages(); for (let page = 1; page <= pages; page += 1) { pdf.setPage(page); pdf.setFontSize(8); pdf.setTextColor(125); pdf.text(`Page ${page} of ${pages}`, 193, 288, { align: "right" }); pdf.text(canonicalUrl, margin, 288); }
+      const pages = pdf.getNumberOfPages(); for (let page = 1; page <= pages; page += 1) { pdf.setPage(page); pdf.setFontSize(8); pdf.setTextColor(125); pdf.text(`Page ${page} of ${pages}`, 193, 288, { align: "right" }); pdf.text(saved.reference, margin, 288); }
       pdf.save(`${safeFileName(saved.reference, saved.title)}.pdf`); setMessage("PDF downloaded successfully.");
     } catch { setErrors(["The PDF could not be generated. Check the images and try again."]); setMessage(""); }
     finally { setBusy(false); }
@@ -188,7 +173,7 @@ export function SopWorkflow({ onClose }: { onClose(): void }) {
     <header><div><span>VIVADOCS · CONTROLLED PROCEDURES</span><h2 id="sop-workflow-title">{mode === "edit" ? editor.id ? "Edit SOP" : "Create a new SOP" : mode === "detail" ? saved?.title : "SOP workspace"}</h2></div><button type="button" aria-label="Close SOP workspace" onClick={closeWorkflow}>×</button></header>
     {message && <div className="sop-feedback" role="status">✓ {message}</div>}
     {errors.length > 0 && <div className="sop-errors" role="alert"><strong>Please check the following:</strong><ul>{errors.map((error) => <li key={error}>{error}</li>)}</ul></div>}
-    {loading ? <div className="sop-loading" role="status">Loading VivaDocs…</div> : mode === "home" ? <div className="sop-workflow-home"><div className="sop-home-hero"><div><span>STANDARD OPERATING PROCEDURES</span><h3>Create clear, visual work instructions.</h3><p>Build controlled procedures step by step, then publish a mobile-ready view with PDF and QR access.</p></div><button type="button" onClick={startNew}>＋ New SOP</button></div><div className="sop-saved-list"><div><h3>Saved SOPs</h3><span>{library.length} documents</span></div>{library.map((item) => <button type="button" key={item.id} onClick={() => loadSop(item.id)}><span><b>{item.reference}</b><strong>{item.title}</strong><small>{item.department} · {item.stepCount} steps · Version {item.version}</small></span><i>Open →</i></button>)}{!library.length && <p>No database SOPs yet. Select New SOP to create the first one.</p>}</div></div> : mode === "edit" ? <div className="sop-editor"><div className="sop-form-grid">
+    {loading ? <div className="sop-loading" role="status">Loading VivaDocs…</div> : mode === "home" ? <div className="sop-workflow-home"><div className="sop-home-hero"><div><span>STANDARD OPERATING PROCEDURES</span><h3>Create clear, visual work instructions.</h3><p>Build controlled procedures step by step, then publish a mobile-ready view with professional PDF export.</p></div><button type="button" onClick={startNew}>＋ New SOP</button></div><div className="sop-saved-list"><div><h3>Saved SOPs</h3><span>{library.length} documents</span></div>{library.map((item) => <button type="button" key={item.id} onClick={() => loadSop(item.id)}><span><b>{item.reference}</b><strong>{item.title}</strong><small>{item.department} · {item.stepCount} steps · Version {item.version}</small></span><i>Open →</i></button>)}{!library.length && <p>No database SOPs yet. Select New SOP to create the first one.</p>}</div></div> : mode === "edit" ? <div className="sop-editor"><div className="sop-form-grid">
       <label className="wide"><span>SOP title *</span><input autoFocus value={editor.title} onChange={(event) => update("title", event.target.value)} /></label>
       <label><span>Department *</span><select required value={editor.department} onChange={(event) => update("department", event.target.value as EditorState["department"])}>{SOP_DEPARTMENTS.map((item) => <option key={item.name} value={item.name}>{item.name}</option>)}</select></label>
       <label><span>SOP reference</span><input readOnly aria-readonly="true" value={editor.reference || `${departmentPrefix(editor.department)}-###### · assigned securely when saved`} /></label>
@@ -196,10 +181,9 @@ export function SopWorkflow({ onClose }: { onClose(): void }) {
       <label><span>Created date *</span><input type="date" value={editor.createdDate} onChange={(event) => update("createdDate", event.target.value)} /></label>
       <label><span>Revision / version *</span><input value={editor.version} onChange={(event) => update("version", event.target.value)} /></label>
       <label><span>Review / approval date</span><input type="date" value={editor.reviewDate} onChange={(event) => update("reviewDate", event.target.value)} /></label>
-    </div><div className="sop-step-list">{editor.steps.map((step, index) => <article className="sop-step-card" key={step.id}><div className="sop-step-head"><span>STEP {index + 1}</span><div><button type="button" aria-label={`Move Step ${index + 1} up`} disabled={index === 0} onClick={() => moveStep(index, -1)}>↑</button><button type="button" aria-label={`Move Step ${index + 1} down`} disabled={index === editor.steps.length - 1} onClick={() => moveStep(index, 1)}>↓</button><button className="danger" type="button" aria-label={`Delete Step ${index + 1}`} onClick={() => removeStep(index)}>Delete</button></div></div><label><span>Instructions *</span><textarea rows={6} required value={step.instruction} onChange={(event) => updateStep(index, { instruction: event.target.value })} placeholder="Describe the action clearly and in the order it should be completed." /></label><div className="sop-image-field"><label><span>{step.file || step.existingImageUrl ? "Replace image" : "Add step image (optional)"}</span><input type="file" accept="image/jpeg,image/png,image/webp,image/gif" onChange={(event) => chooseImage(index, event)} /><small>JPEG, PNG, WebP or GIF · maximum 8 MB</small></label>{(step.previewUrl || step.existingImageUrl) && <div className="sop-image-preview"><img src={step.previewUrl || step.existingImageUrl || ""} alt={step.imageCaption || `Step ${index + 1} preview`} /><button type="button" onClick={() => removeImage(index)}>Remove image</button></div>}</div>{(step.file || step.existingImageUrl) && <label><span>Image caption or alt text</span><input value={step.imageCaption} onChange={(event) => updateStep(index, { imageCaption: event.target.value })} placeholder="Describe what operators should notice" /></label>}<div className="sop-step-next"><button type="button" onClick={addStep}>＋ Add Next Step</button><button type="button" disabled={busy} onClick={finishSop}>{busy ? "Saving…" : "Finish SOP"}</button></div></article>)}</div><div className="sop-editor-actions"><span>{editor.steps.length} {editor.steps.length === 1 ? "step" : "steps"}</span><button className="primary" type="button" disabled={busy} onClick={finishSop}>{busy ? "Saving…" : "Finish SOP"}</button></div></div> : saved ? <div className="sop-detail"><div className="sop-detail-actions"><button type="button" onClick={() => { setMode("home"); window.history.replaceState({}, "", "/vivadocs"); }}>← All SOPs</button><div><button type="button" onClick={startEdit}>Edit SOP</button><button type="button" disabled={busy} onClick={downloadPdf}>↓ Download PDF</button></div></div><article className="sop-document"><div className="sop-document-title"><div><span>{saved.reference} · VERSION {saved.version}</span><h3>{saved.title}</h3><p>{saved.department} · Controlled standard operating procedure</p></div>{qrUrl && <img src={qrUrl} alt={`QR code linking to ${saved.reference}`} />}</div><dl><div><dt>Owner</dt><dd>{saved.author}</dd></div><div><dt>Created</dt><dd>{formatDate(saved.createdDate)}</dd></div><div><dt>Review / approval</dt><dd>{saved.reviewDate ? formatDate(saved.reviewDate) : "Not scheduled"}</dd></div><div><dt>Status</dt><dd>{saved.status}</dd></div></dl><div className="sop-detail-steps">{saved.steps.map((step) => <section key={step.id}><span>STEP {step.position}</span><p>{step.instruction}</p>{step.existingImageUrl && <figure><img src={step.existingImageUrl} alt={step.imageCaption || `Step ${step.position}`} />{step.imageCaption && <figcaption>{step.imageCaption}</figcaption>}</figure>}</section>)}</div><footer><div><strong>Scan to open this SOP</strong><span>{canonicalUrl}</span></div><button type="button" onClick={downloadQr}>Download QR image</button></footer></article></div> : null}
+    </div><div className="sop-step-list">{editor.steps.map((step, index) => <article className="sop-step-card" key={step.id}><div className="sop-step-head"><span>STEP {index + 1}</span><div><button type="button" aria-label={`Move Step ${index + 1} up`} disabled={index === 0} onClick={() => moveStep(index, -1)}>↑</button><button type="button" aria-label={`Move Step ${index + 1} down`} disabled={index === editor.steps.length - 1} onClick={() => moveStep(index, 1)}>↓</button><button className="danger" type="button" aria-label={`Delete Step ${index + 1}`} onClick={() => removeStep(index)}>Delete</button></div></div><label><span>Instructions *</span><textarea rows={6} required value={step.instruction} onChange={(event) => updateStep(index, { instruction: event.target.value })} placeholder="Describe the action clearly and in the order it should be completed." /></label><div className="sop-image-field"><label><span>{step.file || step.existingImageUrl ? "Replace image" : "Add step image (optional)"}</span><input type="file" accept="image/jpeg,image/png,image/webp,image/gif" onChange={(event) => chooseImage(index, event)} /><small>JPEG, PNG, WebP or GIF · maximum 8 MB</small></label>{(step.previewUrl || step.existingImageUrl) && <div className="sop-image-preview"><img src={step.previewUrl || step.existingImageUrl || ""} alt={step.imageCaption || `Step ${index + 1} preview`} /><button type="button" onClick={() => removeImage(index)}>Remove image</button></div>}</div>{(step.file || step.existingImageUrl) && <label><span>Image caption or alt text</span><input value={step.imageCaption} onChange={(event) => updateStep(index, { imageCaption: event.target.value })} placeholder="Describe what operators should notice" /></label>}<div className="sop-step-next"><button type="button" onClick={addStep}>＋ Add Next Step</button><button type="button" disabled={busy} onClick={finishSop}>{busy ? "Saving…" : "Finish SOP"}</button></div></article>)}</div><div className="sop-editor-actions"><span>{editor.steps.length} {editor.steps.length === 1 ? "step" : "steps"}</span><button className="primary" type="button" disabled={busy} onClick={finishSop}>{busy ? "Saving…" : "Finish SOP"}</button></div></div> : saved ? <div className="sop-detail"><div className="sop-detail-actions"><button type="button" onClick={() => { setMode("home"); window.history.replaceState({}, "", "/vivadocs"); }}>← All SOPs</button><div><button type="button" onClick={startEdit}>Edit SOP</button><button type="button" disabled={busy} onClick={downloadPdf}>↓ Download PDF</button></div></div><article className="sop-document"><div className="sop-document-title"><div><span>{saved.reference} · VERSION {saved.version}</span><h3>{saved.title}</h3><p>{saved.department} · Controlled standard operating procedure</p></div></div><dl><div><dt>Owner</dt><dd>{saved.author}</dd></div><div><dt>Created</dt><dd>{formatDate(saved.createdDate)}</dd></div><div><dt>Review / approval</dt><dd>{saved.reviewDate ? formatDate(saved.reviewDate) : "Not scheduled"}</dd></div><div><dt>Status</dt><dd>{saved.status}</dd></div></dl><div className="sop-detail-steps">{saved.steps.map((step) => <section key={step.id}><span>STEP {step.position}</span><p>{step.instruction}</p>{step.existingImageUrl && <figure><img src={step.existingImageUrl} alt={step.imageCaption || `Step ${step.position}`} />{step.imageCaption && <figcaption>{step.imageCaption}</figcaption>}</figure>}</section>)}</div></article></div> : null}
   </section></div>;
 }
 
 function formatDate(value: string) { return new Intl.DateTimeFormat("en-AU", { day: "2-digit", month: "short", year: "numeric", timeZone: "UTC" }).format(new Date(`${value}T00:00:00Z`)); }
-function downloadData(url: string, name: string) { const anchor = document.createElement("a"); anchor.href = url; anchor.download = name; anchor.click(); }
 async function imageAsDataUrl(url: string) { const blob = await (await fetch(url)).blob(); return await new Promise<string>((resolve, reject) => { const reader = new FileReader(); reader.onload = () => resolve(String(reader.result)); reader.onerror = reject; reader.readAsDataURL(blob); }); }

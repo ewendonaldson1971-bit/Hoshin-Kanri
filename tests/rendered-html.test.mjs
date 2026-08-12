@@ -163,7 +163,7 @@ test("mobile workspace drawer covers routes, state and accessible closing behavi
   assert.match(strategy, /view === "Reviews" \? "reviews"/);
 });
 
-test("VivaDocs provides durable SOP creation, media, PDF and stable QR workflows", async () => {
+test("VivaDocs provides durable SOP creation, media and PDF workflows without QR links", async () => {
   const [workflow, model, store, schema, migration, routes, css, hosting] = await Promise.all([
     readFile(new URL("../app/vivadocs/sop-workflow.tsx", import.meta.url), "utf8"),
     readFile(new URL("../lib/vivadocs-model.ts", import.meta.url), "utf8"),
@@ -211,9 +211,8 @@ test("VivaDocs provides durable SOP creation, media, PDF and stable QR workflows
   assert.match(workflow, /Download PDF/);
   assert.match(workflow, /pdf\.addImage/);
   assert.match(workflow, /Page \$\{page\} of \$\{pages\}/);
-  assert.match(workflow, /QRCode\.toDataURL/);
-  assert.match(workflow, /\/vivadocs\?sop=/);
-  assert.match(workflow, /Download QR image/);
+  assert.doesNotMatch(workflow, /QRCode|qrUrl|Download QR|Scan to open/);
+  assert.doesNotMatch(workflow, /canonicalUrl/);
   assert.match(workflow, /aria-modal="true"/);
   assert.match(workflow, /aria-readonly="true"/);
   assert.match(css, /height: min\(94dvh,940px\)/);
