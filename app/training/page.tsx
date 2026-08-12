@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { ChangeEvent, DragEvent, FormEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { MobileWorkspaceNavigation, navigationItem } from "../components/workspace-navigation";
 
 type Course = {
   id: string;
@@ -483,10 +484,10 @@ export default function TrainingPage() {
         </Link>
         <nav aria-label="Vivad workspace">
           <span>Workspace</span>
-          <Link href="/strategy"><i>◎</i> Strategy</Link>
-          <Link href="/quality"><i>◇</i> Quality events</Link>
-          <Link className="active" href="/training"><i>▷</i> Training academy</Link>
-          <Link href="/vivadocs"><i>▤</i> VivaDocs</Link>
+          <Link href={navigationItem("strategy").href}><i>{navigationItem("strategy").icon}</i> {navigationItem("strategy").label}</Link>
+          <Link href={navigationItem("quality").href}><i>{navigationItem("quality").icon}</i> {navigationItem("quality").label}</Link>
+          <Link className="active" href={navigationItem("training").href}><i>{navigationItem("training").icon}</i> {navigationItem("training").label}</Link>
+          <Link href={navigationItem("vivadocs").href}><i>{navigationItem("vivadocs").icon}</i> {navigationItem("vivadocs").label}</Link>
         </nav>
         <div className="training-progress-card">
           <div><span>YOUR PROGRESS</span><strong>{completionRate}%</strong></div>
@@ -497,6 +498,7 @@ export default function TrainingPage() {
 
       <main className="training-main">
         <header className="training-topbar">
+          <MobileWorkspaceNavigation activeItem="training" />
           <div>
             <span className="training-eyebrow">VIVAD LEARNING SYSTEM</span>
             <h1>Training Academy</h1>

@@ -122,8 +122,43 @@ test("includes the interactive VivaDocs controlled-document workspace", async ()
   assert.match(page, /window\.localStorage/);
   assert.match(page, /Submit completion/);
   assert.match(strategy, /href="\/vivadocs"/);
-  assert.match(quality, /href="\/vivadocs"/);
-  assert.match(training, /href="\/vivadocs"/);
+  assert.match(quality, /navigationItem\("vivadocs"\)\.href/);
+  assert.match(training, /navigationItem\("vivadocs"\)\.href/);
   assert.match(css, /\.vivadocs-shell/);
   assert.match(css, /\.operator-player/);
+});
+
+test("mobile workspace drawer covers routes, state and accessible closing behaviour", async () => {
+  const [navigation, home, strategy, quality, training, vivadocs, css] = await Promise.all([
+    readFile(new URL("../app/components/workspace-navigation.tsx", import.meta.url), "utf8"),
+    readFile(new URL("../app/page.tsx", import.meta.url), "utf8"),
+    readFile(new URL("../app/strategy/page.tsx", import.meta.url), "utf8"),
+    readFile(new URL("../app/quality/page.tsx", import.meta.url), "utf8"),
+    readFile(new URL("../app/training/page.tsx", import.meta.url), "utf8"),
+    readFile(new URL("../app/vivadocs/page.tsx", import.meta.url), "utf8"),
+    readFile(new URL("../app/globals.css", import.meta.url), "utf8"),
+  ]);
+
+  for (const label of ["Strategy", "Quality events", "Training academy", "Scorecards", "Initiatives", "Reviews", "VivaDocs", "People", "Settings"]) {
+    assert.match(navigation, new RegExp(`label: "${label}"`));
+  }
+  assert.match(navigation, /aria-expanded=\{open\}/);
+  assert.match(navigation, /aria-controls="mobile-workspace-drawer"/);
+  assert.match(navigation, /aria-modal="true"/);
+  assert.match(navigation, /aria-current=\{activeItem === item\.id \? "page"/);
+  assert.match(navigation, /event\.key === "Escape"/);
+  assert.match(navigation, /mobile-drawer-backdrop[\s\S]*closeDrawer\(true\)/);
+  assert.match(navigation, /onClick=\{\(\) => closeDrawer\(\)\}/);
+  assert.match(navigation, /document\.body\.style\.overflow = "hidden"/);
+  assert.match(navigation, /window\.matchMedia\("\(min-width: 701px\)"\)/);
+  assert.match(navigation, /triggerRef\.current\?\.focus/);
+  assert.match(navigation, /event\.key !== "Tab"/);
+  assert.match(css, /height: 100dvh/);
+  assert.match(css, /env\(safe-area-inset-top/);
+  assert.match(css, /overflow-y: auto/);
+  assert.match(css, /@media \(max-width: 700px\)/);
+  assert.match(css, /:focus-visible/);
+  for (const page of [home, strategy, quality, training, vivadocs]) assert.match(page, /MobileWorkspaceNavigation/);
+  assert.match(strategy, /view === "Initiatives" \? "initiatives"/);
+  assert.match(strategy, /view === "Reviews" \? "reviews"/);
 });
