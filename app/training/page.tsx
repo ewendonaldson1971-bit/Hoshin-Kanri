@@ -212,6 +212,8 @@ export default function TrainingPage() {
     const savedYoutube = window.localStorage.getItem(youtubeKey);
     if (savedConfig) {
       try {
+        // Restore the user's local Stream connection settings after mount.
+        // eslint-disable-next-line react-hooks/set-state-in-effect
         setConfig(JSON.parse(savedConfig) as StreamConfig);
       } catch {
         window.localStorage.removeItem(configKey);
@@ -245,6 +247,8 @@ export default function TrainingPage() {
   }, []);
 
   useEffect(() => {
+    // Populate the remotely backed library when this client surface mounts.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     void refreshLibrary();
   }, [refreshLibrary]);
 
@@ -482,6 +486,7 @@ export default function TrainingPage() {
           <Link href="/strategy"><i>◎</i> Strategy</Link>
           <Link href="/quality"><i>◇</i> Quality events</Link>
           <Link className="active" href="/training"><i>▷</i> Training academy</Link>
+          <Link href="/vivadocs"><i>▤</i> VivaDocs</Link>
         </nav>
         <div className="training-progress-card">
           <div><span>YOUR PROGRESS</span><strong>{completionRate}%</strong></div>

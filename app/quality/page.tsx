@@ -122,6 +122,8 @@ export default function QualityPage() {
   }, []);
 
   useEffect(() => {
+    // Initial data hydration is intentionally performed once when the client mounts.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     void loadEvents();
     void loadTraining();
   }, [loadEvents, loadTraining]);
@@ -145,13 +147,13 @@ export default function QualityPage() {
     };
   }, []);
 
+  const [recentCutoff] = useState(() => Date.now() - 7 * 24 * 60 * 60 * 1000);
   const recentVideos = useMemo(() => {
-    const weekAgo = Date.now() - 7 * 24 * 60 * 60 * 1000;
     return training.videos
-      .filter((video) => video.created && new Date(video.created).getTime() >= weekAgo)
+      .filter((video) => video.created && new Date(video.created).getTime() >= recentCutoff)
       .sort((a, b) => new Date(b.created ?? 0).getTime() - new Date(a.created ?? 0).getTime())
       .slice(0, 4);
-  }, [training.videos]);
+  }, [recentCutoff, training.videos]);
 
   const categories = useMemo(
     () =>
@@ -298,6 +300,7 @@ export default function QualityPage() {
           <Link href="/strategy"><i>◎</i> Strategy</Link>
           <Link className="active" href="/quality"><i>◇</i> Quality events</Link>
           <Link href="/training"><i>▷</i> Training academy</Link>
+          <Link href="/vivadocs"><i>▤</i> VivaDocs</Link>
           <a href="#trends"><i>↗</i> Trends</a>
           <a href="#event-log"><i>☷</i> Event log</a>
         </nav>

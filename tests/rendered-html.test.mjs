@@ -85,28 +85,45 @@ test("includes the Cloudflare Stream training academy", async () => {
   assert.match(css, /\.stream-modal/);
 });
 
-test("protects Stream uploads with the Lotus login system", async () => {
-  const [page, uploadRoute, sessionRoute, auth, envExample] = await Promise.all([
+test("provides public access to the Stream and YouTube video uploader", async () => {
+  const [page, uploadRoute] = await Promise.all([
     readFile(new URL("../app/training/page.tsx", import.meta.url), "utf8"),
     readFile(new URL("../app/api/training/upload/route.ts", import.meta.url), "utf8"),
-    readFile(new URL("../app/api/auth/session/route.ts", import.meta.url), "utf8"),
-    readFile(new URL("../lib/auth/hoshin-auth.ts", import.meta.url), "utf8"),
-    readFile(new URL("../.env.example", import.meta.url), "utf8"),
   ]);
 
-  assert.match(page, /Sign in to add video/);
+  assert.match(page, /Add new video/);
   assert.match(page, /TRAINING VIDEO LIBRARY/);
   assert.match(page, /Drag and drop your video/);
   assert.match(page, /Paste from YouTube/);
   assert.match(page, /youtube-nocookie\.com\/embed/);
   assert.match(page, /vivad-youtube-training-links/);
   assert.match(page, /onDrop=\{dropFile\}/);
-  assert.match(uploadRoute, /getHoshinSessionUsername/);
   assert.match(uploadRoute, /stream\/direct_upload/);
-  assert.match(sessionRoute, /authenticated: Boolean\(username\)/);
-  assert.match(auth, /application: "Lotus"/);
-  assert.match(auth, /HttpOnly; SameSite=Lax/);
-  assert.match(envExample, /LOTUS_AUTH_SECRET=/);
+  assert.doesNotMatch(uploadRoute, /getHoshinSessionUsername/);
   assert.doesNotMatch(page, /Upload access key/);
   assert.doesNotMatch(uploadRoute, /CLOUDFLARE_STREAM_UPLOAD_SECRET/);
+});
+
+test("includes the interactive VivaDocs controlled-document workspace", async () => {
+  const [page, strategy, quality, training, css] = await Promise.all([
+    readFile(new URL("../app/vivadocs/page.tsx", import.meta.url), "utf8"),
+    readFile(new URL("../app/strategy/page.tsx", import.meta.url), "utf8"),
+    readFile(new URL("../app/quality/page.tsx", import.meta.url), "utf8"),
+    readFile(new URL("../app/training/page.tsx", import.meta.url), "utf8"),
+    readFile(new URL("../app/globals.css", import.meta.url), "utf8"),
+  ]);
+
+  assert.match(page, /VivaDocs/);
+  assert.match(page, /SOP library/);
+  assert.match(page, /Approval queue/);
+  assert.match(page, /Operator mode/);
+  assert.match(page, /Skills matrix/);
+  assert.match(page, /Audit log/);
+  assert.match(page, /window\.localStorage/);
+  assert.match(page, /Submit completion/);
+  assert.match(strategy, /href="\/vivadocs"/);
+  assert.match(quality, /href="\/vivadocs"/);
+  assert.match(training, /href="\/vivadocs"/);
+  assert.match(css, /\.vivadocs-shell/);
+  assert.match(css, /\.operator-player/);
 });
