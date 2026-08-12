@@ -290,8 +290,8 @@ export default function QualityPage() {
   return (
     <div className="quality-shell">
       <aside className="quality-sidebar">
-        <Link className="quality-brand" href="/" aria-label="Vivad home">
-          <img src="/vivad-logo.png" alt="Vivad" />
+        <Link className="quality-brand" href="/" aria-label="Vivad SPARK home">
+          <img src="/vivad-logo.png" alt="Vivad SPARK — Hoshin, Continuous Improvement" />
         </Link>
         <nav aria-label="Vivad workspace">
           <span className="quality-nav-label">Workspace</span>

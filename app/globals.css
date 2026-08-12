@@ -52,9 +52,9 @@ button { cursor: pointer; }
   font: 700 24px/1 "Cabin", sans-serif;
   letter-spacing: -0.5px;
 }
-.vivad-logo { display: block; width: 146px; height: auto; object-fit: contain; }
-.strategy-vivad-logo { width: 142px; }
-.footer-vivad-logo { width: 132px; }
+.vivad-logo { display: block; width: 190px; height: auto; object-fit: contain; }
+.strategy-vivad-logo { width: 184px; }
+.footer-vivad-logo { width: 174px; }
 .brand-mark { width: 30px; height: 30px; display: flex; align-items: flex-end; gap: 3px; transform: skew(-12deg); }
 .brand-mark i { display: block; width: 7px; border-radius: 2px 2px 1px 1px; background: var(--red); }
 .brand-mark i:nth-child(1) { height: 13px; }
@@ -368,7 +368,8 @@ select:focus, input:focus { border-color: var(--blue); box-shadow: 0 0 0 3px rgb
   .sidebar { width: 76px; }
   .brand { justify-content: center; padding: 0; }
   .nav-label, .nav-item:not(.active), .nav-item.active:not(:first-of-type), .sidebar-footer { display: none; }
-  .strategy-vivad-logo { width: 54px; object-position: left; clip-path: inset(0 72% 0 0); }
+  .brand:has(.strategy-vivad-logo) { overflow: hidden; }
+  .strategy-vivad-logo { width: 150px; max-width: none; transform: translateX(48px); clip-path: inset(0 72% 0 0); }
   .side-nav { padding: 14px 10px; }
   .nav-item.active { justify-content: center; padding: 0; }
   .nav-icon { font-size: 20px; }
@@ -652,7 +653,7 @@ select:focus, input:focus { border-color: var(--blue); box-shadow: 0 0 0 3px rgb
   align-items: center;
   padding: 0 9px;
 }
-.quality-brand img { display: block; width: 138px; height: auto; }
+.quality-brand img { display: block; width: 180px; height: auto; }
 .quality-sidebar nav { display: grid; gap: 5px; }
 .quality-nav-label {
   margin: 13px 12px 8px;
@@ -1080,7 +1081,7 @@ select:focus, input:focus { border-color: var(--blue); box-shadow: 0 0 0 3px rgb
 @media (max-width: 880px) {
   .quality-sidebar { width: 74px; padding-inline: 9px; }
   .quality-brand { justify-content: center; overflow: hidden; padding: 0; }
-  .quality-brand img { width: 132px; max-width: none; transform: translateX(42px); }
+  .quality-brand img { width: 150px; max-width: none; transform: translateX(48px); clip-path: inset(0 72% 0 0); }
   .quality-nav-label, .quality-sidebar-note { display: none; }
   .quality-sidebar nav a { justify-content: center; padding: 0; font-size: 0; }
   .quality-sidebar nav a i { font-size: 18px; }
@@ -1129,7 +1130,7 @@ select:focus, input:focus { border-color: var(--blue); box-shadow: 0 0 0 3px rgb
   background: #fff;
 }
 .training-brand { height: 88px; display: flex; align-items: center; padding: 0 9px; }
-.training-brand img { display: block; width: 138px; height: auto; }
+.training-brand img { display: block; width: 180px; height: auto; }
 .training-sidebar nav { display: grid; gap: 5px; }
 .training-sidebar nav > span { margin: 13px 12px 8px; color: #9a9ea4; font-size: 9px; font-weight: 700; letter-spacing: 1.2px; text-transform: uppercase; }
 .training-sidebar nav a { min-height: 44px; display: flex; align-items: center; gap: 12px; padding: 0 12px; border-radius: 7px; color: #696d73; font-size: 12px; font-weight: 600; text-decoration: none; }
@@ -1271,7 +1272,7 @@ select:focus, input:focus { border-color: var(--blue); box-shadow: 0 0 0 3px rgb
 @media (max-width: 850px) {
   .training-sidebar { width: 74px; padding-inline: 9px; }
   .training-brand { justify-content: center; overflow: hidden; padding: 0; }
-  .training-brand img { width: 132px; max-width: none; transform: translateX(42px); }
+  .training-brand img { width: 150px; max-width: none; transform: translateX(48px); clip-path: inset(0 72% 0 0); }
   .training-sidebar nav > span, .training-progress-card { display: none; }
   .training-sidebar nav a { justify-content: center; padding: 0; font-size: 0; }
   .training-sidebar nav a i { font-size: 18px; }
