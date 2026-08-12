@@ -1,8 +1,9 @@
 "use client";
 
 import Link from "next/link";
-import { FormEvent, useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { MobileWorkspaceNavigation, workspaceNavigationItems } from "../components/workspace-navigation";
+import { SopWorkflow } from "./sop-workflow";
 
 type Status = "Draft" | "In review" | "Approved" | "Published";
 type View = "Dashboard" | "SOP library" | "Approvals" | "Operator mode" | "Skills matrix" | "Audit log";
@@ -126,8 +127,6 @@ export default function VivaDocsPage() {
   const [status, setStatus] = useState("All statuses");
   const [selectedId, setSelectedId] = useState(seedSops[0].id);
   const [createOpen, setCreateOpen] = useState(false);
-  const [draftTitle, setDraftTitle] = useState("");
-  const [draftReference, setDraftReference] = useState("");
   const [runId, setRunId] = useState(seedSops[0].id);
   const [runStep, setRunStep] = useState(0);
   const [responses, setResponses] = useState<Record<number, string>>({});
@@ -158,6 +157,12 @@ export default function VivaDocsPage() {
     return () => window.clearTimeout(timeout);
   }, [toast]);
 
+  useEffect(() => {
+    if (!new URLSearchParams(window.location.search).has("sop")) return;
+    const timeout = window.setTimeout(() => setCreateOpen(true), 0);
+    return () => window.clearTimeout(timeout);
+  }, []);
+
   const filtered = useMemo(() => sops.filter((sop) => {
     const haystack = `${sop.title} ${sop.reference} ${sop.category} ${sop.owner}`.toLowerCase();
     return haystack.includes(query.toLowerCase()) && (status === "All statuses" || sop.status === status);
@@ -179,22 +184,6 @@ export default function VivaDocsPage() {
     const action = next === "In review" ? "Approval requested" : next === "Approved" ? "Revision approved" : "SOP published";
     record(action, `${sop.reference} revision ${sop.revision}`);
     setToast(`${sop.reference} is now ${next.toLowerCase()}.`);
-  }
-
-  function createSop(event: FormEvent) {
-    event.preventDefault();
-    if (!draftTitle.trim() || !draftReference.trim()) return;
-    const sop: Sop = {
-      id: `${draftReference}-${Date.now()}`.toLowerCase(), reference: draftReference.trim().toUpperCase(), title: draftTitle.trim(),
-      description: "New visual procedure ready for step content and review.", category: "Operations", location: "Sydney Plant",
-      owner: "Rubin Sekuleski", revision: "0.1", status: "Draft", nextReview: "Not scheduled",
-      steps: [{ title: "First step", instruction: "Add a clear instruction for the operator.", kind: "Info" }],
-    };
-    setSops((current) => [sop, ...current]);
-    record("SOP draft created", `${sop.reference} revision 0.1`);
-    setSelectedId(sop.id);
-    setDraftTitle(""); setDraftReference(""); setCreateOpen(false); setView("SOP library");
-    setToast("New SOP draft created.");
   }
 
   function startRun(id: string) {
@@ -265,7 +254,7 @@ export default function VivaDocsPage() {
         {view === "Audit log" && <section className="vivadocs-section"><div className="vivadocs-section-head"><div><span>APPEND-ONLY RECORD</span><h2>Audit log</h2><p>Important document-control and completion events.</p></div><button className="button button-ghost" type="button" onClick={() => setToast("Audit log exported as CSV.")}>↓ Export log</button></div><div className="audit-table"><div><span>Event</span><span>Record</span><span>Actor</span><span>Time</span></div>{audit.map((event) => <div key={event.id}><span><i />{event.action}</span><strong>{event.detail}</strong><span>{event.actor}</span><time>{event.time}</time></div>)}</div></section>}
       </main>
 
-      {createOpen && <div className="vivadocs-modal-backdrop" role="presentation" onMouseDown={() => setCreateOpen(false)}><form className="vivadocs-modal" onSubmit={createSop} onMouseDown={(event) => event.stopPropagation()}><div><span>NEW CONTROLLED DOCUMENT</span><button type="button" aria-label="Close" onClick={() => setCreateOpen(false)}>×</button></div><h2>Create an SOP</h2><p>Start with the document identity. You can add visual steps before submitting it for approval.</p><label><span>SOP title</span><input autoFocus required value={draftTitle} onChange={(event) => setDraftTitle(event.target.value)} placeholder="e.g. Daily machine start-up" /></label><label><span>Reference number</span><input required value={draftReference} onChange={(event) => setDraftReference(event.target.value)} placeholder="e.g. OPS-025" /></label><div className="vivadocs-modal-note"><b>Revision 0.1</b><span>The new document will be saved as a draft owned by you.</span></div><footer><button type="button" onClick={() => setCreateOpen(false)}>Cancel</button><button type="submit">Create draft →</button></footer></form></div>}
+      {createOpen && <SopWorkflow onClose={() => setCreateOpen(false)} />}
       {toast && <div className="vivadocs-toast" role="status"><i>✓</i>{toast}</div>}
     </div>
   );

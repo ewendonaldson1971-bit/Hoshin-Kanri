@@ -162,3 +162,61 @@ test("mobile workspace drawer covers routes, state and accessible closing behavi
   assert.match(strategy, /view === "Initiatives" \? "initiatives"/);
   assert.match(strategy, /view === "Reviews" \? "reviews"/);
 });
+
+test("VivaDocs provides durable SOP creation, media, PDF and stable QR workflows", async () => {
+  const [workflow, model, store, schema, migration, routes, css, hosting] = await Promise.all([
+    readFile(new URL("../app/vivadocs/sop-workflow.tsx", import.meta.url), "utf8"),
+    readFile(new URL("../lib/vivadocs-model.ts", import.meta.url), "utf8"),
+    readFile(new URL("../lib/vivadocs-store.ts", import.meta.url), "utf8"),
+    readFile(new URL("../db/schema.ts", import.meta.url), "utf8"),
+    readFile(new URL("../drizzle/0000_lethal_multiple_man.sql", import.meta.url), "utf8"),
+    readFile(new URL("../app/api/vivadocs/sops/route.ts", import.meta.url), "utf8"),
+    readFile(new URL("../app/globals.css", import.meta.url), "utf8"),
+    readFile(new URL("../.openai/hosting.json", import.meta.url), "utf8"),
+  ]);
+
+  const departments = [
+    ["Prepress", "PRE"], ["CST", "CST"], ["Printers", "PRI"], ["Cutters", "CUT"], ["Fab1", "FAB"],
+    ["Sew", "SEW"], ["Despatch", "DES"], ["Light Box", "LIG"], ["Framing", "FRA"], ["Office", "OFF"],
+  ];
+  for (const [department, prefix] of departments) {
+    assert.match(model, new RegExp(`name: "${department}"`));
+    assert.match(model, new RegExp(`prefix: "${prefix}"`));
+  }
+  assert.match(model, /padStart\(6, "0"\)/);
+  assert.match(store, /ON CONFLICT\(department\) DO UPDATE SET last_number = last_number \+ 1/);
+  assert.match(store, /RETURNING last_number/);
+  assert.match(schema, /uniqueIndex\("idx_sops_reference"\)/);
+  assert.match(schema, /uniqueIndex\("idx_sop_steps_position"\)/);
+  assert.match(migration, /CREATE TABLE `sop_counters`/);
+  assert.match(migration, /CREATE UNIQUE INDEX `idx_sops_reference`/);
+  assert.match(store, /Promise\.allSettled\(uploaded\.map/);
+  assert.match(store, /IMAGE_TYPES/);
+  assert.match(store, /MAX_IMAGE_BYTES = 8 \* 1024 \* 1024/);
+  assert.match(store, /existingImageKey/);
+  assert.match(routes, /export async function POST/);
+  assert.match(hosting, /"d1": "DB"/);
+  assert.match(hosting, /"r2": "SOP_ASSETS"/);
+
+  assert.match(workflow, /Add Next Step/);
+  assert.match(workflow, /Move Step \$\{index \+ 1\} up/);
+  assert.match(workflow, /Delete Step \$\{index \+ 1\}/);
+  assert.match(workflow, /window\.confirm\(`Delete Step/);
+  assert.match(workflow, /URL\.createObjectURL/);
+  assert.match(workflow, /Replace image/);
+  assert.match(workflow, /Remove image/);
+  assert.match(workflow, /beforeunload/);
+  assert.match(workflow, /Finish SOP/);
+  assert.match(workflow, /Edit SOP/);
+  assert.match(workflow, /Download PDF/);
+  assert.match(workflow, /pdf\.addImage/);
+  assert.match(workflow, /Page \$\{page\} of \$\{pages\}/);
+  assert.match(workflow, /QRCode\.toDataURL/);
+  assert.match(workflow, /\/vivadocs\?sop=/);
+  assert.match(workflow, /Download QR image/);
+  assert.match(workflow, /aria-modal="true"/);
+  assert.match(workflow, /aria-readonly="true"/);
+  assert.match(css, /height: min\(94dvh,940px\)/);
+  assert.match(css, /env\(safe-area-inset-bottom\)/);
+  assert.match(css, /@media print/);
+});
