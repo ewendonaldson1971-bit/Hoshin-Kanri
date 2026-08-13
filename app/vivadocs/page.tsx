@@ -7,6 +7,7 @@ import {
   workspaceNavigationItems,
 } from "../components/workspace-navigation";
 import { SopWorkflow } from "./sop-workflow";
+import { SopPdfActions } from "./sop-pdf-actions";
 
 type Status = "Draft" | "In review" | "Approved" | "Published";
 type View =
@@ -844,6 +845,7 @@ export default function VivaDocsPage() {
                         Run this SOP <b>▷</b>
                       </button>
                     )}
+                    <SopPdfActions sop={selected} compact />
                     <button
                       className="secondary"
                       type="button"

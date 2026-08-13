@@ -127,6 +127,7 @@ test("includes the interactive VivaDocs controlled-document workspace", async ()
   assert.match(page, /imageUrl: step\.existingImageUrl/);
   assert.match(page, /operator-visual.*has-image/);
   assert.match(page, /Visual instruction for Step/);
+  assert.match(page, /<SopPdfActions sop=\{selected\} compact/);
   assert.match(page, /Submit completion/);
   assert.match(strategy, /href="\/vivadocs"/);
   assert.match(quality, /navigationItem\("vivadocs"\)\.href/);
@@ -171,8 +172,9 @@ test("mobile workspace drawer covers routes, state and accessible closing behavi
 });
 
 test("VivaDocs provides durable SOP creation, media and PDF workflows without QR links", async () => {
-  const [workflow, model, store, schema, migration, routes, css, hosting] = await Promise.all([
+  const [workflow, pdfActions, model, store, schema, migration, routes, css, hosting] = await Promise.all([
     readFile(new URL("../app/vivadocs/sop-workflow.tsx", import.meta.url), "utf8"),
+    readFile(new URL("../app/vivadocs/sop-pdf-actions.tsx", import.meta.url), "utf8"),
     readFile(new URL("../lib/vivadocs-model.ts", import.meta.url), "utf8"),
     readFile(new URL("../lib/vivadocs-store.ts", import.meta.url), "utf8"),
     readFile(new URL("../db/schema.ts", import.meta.url), "utf8"),
@@ -219,9 +221,30 @@ test("VivaDocs provides durable SOP creation, media and PDF workflows without QR
   assert.match(workflow, /beforeunload/);
   assert.match(workflow, /Finish SOP/);
   assert.match(workflow, /Edit SOP/);
-  assert.match(workflow, /Download PDF/);
-  assert.match(workflow, /pdf\.addImage/);
-  assert.match(workflow, /Page \$\{page\} of \$\{pages\}/);
+  assert.match(workflow, /<SopPdfActions/);
+  assert.match(pdfActions, /export const MAX_STEPS_PER_PDF_PAGE = 4/);
+  assert.match(pdfActions, /stepsOnPage === MAX_STEPS_PER_PDF_PAGE/);
+  assert.match(pdfActions, /y \+ blockHeight > contentBottom/);
+  assert.match(pdfActions, /if \(blockHeight > contentBottom - contentTop\)/);
+  assert.match(pdfActions, /for \(let index = 0; index < prepared\.length; index \+= 1\)/);
+  assert.match(pdfActions, /`Status: \$\{sop\.status/);
+  assert.match(pdfActions, /`Owner: \$\{sop\.owner/);
+  assert.match(pdfActions, /`Location: \$\{sop\.location/);
+  assert.match(pdfActions, /`Review: \$\{dateLabel\(sop\.reviewDate\)\}`/);
+  assert.match(pdfActions, /LOGO_URL = "\/vivad-logo\.png"/);
+  assert.match(pdfActions, /pdf\.addImage\(logoData/);
+  assert.match(pdfActions, /Page \$\{page\} of \$\{pages\}/);
+  assert.match(pdfActions, /NO STEP IMAGE PROVIDED/);
+  assert.match(pdfActions, /STEP IMAGE UNAVAILABLE/);
+  assert.match(pdfActions, /navigator\.share/);
+  assert.match(pdfActions, /navigator\.canShare/);
+  assert.match(pdfActions, /frameWindow\.print\(\)/);
+  assert.match(pdfActions, /link\.download = pdf\.filename/);
+  assert.match(pdfActions, /Sharing is not supported on this device/);
+  assert.match(pdfActions, /Rev-\$\{filenamePart\(sop\.revision/);
+  assert.match(pdfActions, /\[<>:"\/\\\\\|\?\*/);
+  assert.match(pdfActions, /aria-haspopup="dialog"/);
+  assert.match(pdfActions, /aria-modal="true"/);
   assert.doesNotMatch(workflow, /QRCode|qrUrl|Download QR|Scan to open/);
   assert.doesNotMatch(workflow, /canonicalUrl/);
   assert.match(workflow, /aria-modal="true"/);
