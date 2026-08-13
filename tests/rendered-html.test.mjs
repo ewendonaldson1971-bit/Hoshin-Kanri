@@ -123,7 +123,10 @@ test("includes the interactive VivaDocs controlled-document workspace", async ()
   assert.match(page, /async function syncStoredSops/);
   assert.match(page, /fetch\("\/api\/vivadocs\/sops"/);
   assert.match(page, /onSaved=\{syncStoredSops\}/);
-  assert.match(page, /return \[\.\.\.stored, \.\.\.current\.filter/);
+  assert.match(page, /return \[\s*\.\.\.stored,\s*\.\.\.current\.filter/);
+  assert.match(page, /imageUrl: step\.existingImageUrl/);
+  assert.match(page, /operator-visual.*has-image/);
+  assert.match(page, /Visual instruction for Step/);
   assert.match(page, /Submit completion/);
   assert.match(strategy, /href="\/vivadocs"/);
   assert.match(quality, /navigationItem\("vivadocs"\)\.href/);
