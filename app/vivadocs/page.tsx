@@ -24,6 +24,15 @@ type Sop = {
 
 type AuditEvent = { id: string; action: string; detail: string; time: string; actor: string };
 
+type StoredSopSummary = {
+  id: string; reference: string; title: string; department: string; author: string;
+  version: string; reviewDate: string; status: string; stepCount: number;
+};
+
+type StoredSopDetail = StoredSopSummary & {
+  steps: Array<{ position: number; instruction: string }>;
+};
+
 const STORAGE_KEY = "vivadocs-demo-state-v1";
 
 const seedSops: Sop[] = [
@@ -145,6 +154,7 @@ export default function VivaDocsPage() {
     } catch {
       window.localStorage.removeItem(STORAGE_KEY);
     }
+    void syncStoredSops();
   }, []);
 
   useEffect(() => {
@@ -172,6 +182,39 @@ export default function VivaDocsPage() {
   const running = sops.find((sop) => sop.id === runId) ?? sops[0];
   const published = sops.filter((sop) => sop.status === "Published");
   const approvalQueue = sops.filter((sop) => sop.status === "In review" || sop.status === "Approved");
+
+  async function syncStoredSops() {
+    try {
+      const response = await fetch("/api/vivadocs/sops", { cache: "no-store" });
+      if (!response.ok) return;
+      const summaries = ((await response.json()).sops ?? []) as StoredSopSummary[];
+      const details = await Promise.all(summaries.map(async (summary) => {
+        const detailResponse = await fetch(`/api/vivadocs/sops/${encodeURIComponent(summary.id)}`, { cache: "no-store" });
+        if (!detailResponse.ok) return null;
+        return (await detailResponse.json()).sop as StoredSopDetail;
+      }));
+      const stored = details.filter((item): item is StoredSopDetail => Boolean(item)).map((item): Sop => ({
+        id: item.id,
+        reference: item.reference,
+        title: item.title,
+        description: `Controlled ${item.department} standard operating procedure.`,
+        category: item.department,
+        location: item.department,
+        owner: item.author,
+        revision: item.version,
+        status: (["Draft", "In review", "Approved", "Published"].includes(item.status) ? item.status : "Published") as Status,
+        nextReview: item.reviewDate || "Not scheduled",
+        steps: item.steps.map((step) => ({ title: `Step ${step.position}`, instruction: step.instruction, kind: "Info" })),
+      }));
+      setSops((current) => {
+        const storedIds = new Set(stored.map((item) => item.id));
+        return [...stored, ...current.filter((item) => !storedIds.has(item.id))];
+      });
+      if (stored.length) setSelectedId((current) => current || stored[0].id);
+    } catch {
+      // Keep the local sample library available if hosted storage is temporarily unavailable.
+    }
+  }
 
   function record(action: string, detail: string) {
     setAudit((current) => [{ id: crypto.randomUUID(), action, detail, time: `Today, ${nowLabel()}`, actor: "Rubin Sekuleski" }, ...current]);
@@ -254,7 +297,7 @@ export default function VivaDocsPage() {
         {view === "Audit log" && <section className="vivadocs-section"><div className="vivadocs-section-head"><div><span>APPEND-ONLY RECORD</span><h2>Audit log</h2><p>Important document-control and completion events.</p></div><button className="button button-ghost" type="button" onClick={() => setToast("Audit log exported as CSV.")}>↓ Export log</button></div><div className="audit-table"><div><span>Event</span><span>Record</span><span>Actor</span><span>Time</span></div>{audit.map((event) => <div key={event.id}><span><i />{event.action}</span><strong>{event.detail}</strong><span>{event.actor}</span><time>{event.time}</time></div>)}</div></section>}
       </main>
 
-      {createOpen && <SopWorkflow onClose={() => setCreateOpen(false)} />}
+      {createOpen && <SopWorkflow onSaved={syncStoredSops} onClose={() => { setCreateOpen(false); void syncStoredSops(); }} />}
       {toast && <div className="vivadocs-toast" role="status"><i>✓</i>{toast}</div>}
     </div>
   );

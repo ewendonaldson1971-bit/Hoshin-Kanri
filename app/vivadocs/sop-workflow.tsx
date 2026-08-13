@@ -11,7 +11,7 @@ const today = () => new Date().toISOString().slice(0, 10);
 const blankStep = (): EditorStep => ({ id: crypto.randomUUID(), position: 1, instruction: "", imageCaption: "", existingImageKey: null, existingImageUrl: null, uploadKey: null });
 const blankEditor = (): EditorState => ({ title: "", department: "Prepress", author: "", createdDate: today(), version: "1.0", reviewDate: "", steps: [blankStep()] });
 
-export function SopWorkflow({ onClose }: { onClose(): void }) {
+export function SopWorkflow({ onClose, onSaved }: { onClose(): void; onSaved?(): void }) {
   const [mode, setMode] = useState<"home" | "edit" | "detail">("home");
   const [editor, setEditor] = useState<EditorState>(blankEditor);
   const [saved, setSaved] = useState<StoredSop | null>(null);
@@ -141,6 +141,7 @@ export function SopWorkflow({ onClose }: { onClose(): void }) {
       setSaved(result.sop); setMode("detail"); setDirty(false); setMessage(`${result.sop.reference} saved successfully.`);
       window.history.replaceState({}, "", `/vivadocs?sop=${encodeURIComponent(result.sop.id)}`);
       await loadLibrary();
+      onSaved?.();
     } catch (error) { setErrors([error instanceof Error ? error.message : "The SOP could not be saved."]); setMessage(""); }
     finally { setBusy(false); }
   }

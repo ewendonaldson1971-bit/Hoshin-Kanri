@@ -120,6 +120,10 @@ test("includes the interactive VivaDocs controlled-document workspace", async ()
   assert.match(page, /Skills matrix/);
   assert.match(page, /Audit log/);
   assert.match(page, /window\.localStorage/);
+  assert.match(page, /async function syncStoredSops/);
+  assert.match(page, /fetch\("\/api\/vivadocs\/sops"/);
+  assert.match(page, /onSaved=\{syncStoredSops\}/);
+  assert.match(page, /return \[\.\.\.stored, \.\.\.current\.filter/);
   assert.match(page, /Submit completion/);
   assert.match(strategy, /href="\/vivadocs"/);
   assert.match(quality, /navigationItem\("vivadocs"\)\.href/);
