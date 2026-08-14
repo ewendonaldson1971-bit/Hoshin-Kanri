@@ -8,16 +8,16 @@ training, and **VivaDocs** visual work instructions. VivaDocs is available at
 transitions, an approval queue, a touch-friendly operator player, a skills
 matrix, and an append-only activity view.
 
-The demonstration workspace is intentionally self-contained. Seeded SOPs and
-competency records make the module explorable immediately, while SOPs created
-or progressed in the interface persist in the current browser with
-`localStorage`. This is a front-end product slice; production rollout should
-replace the local adapter with tenant-isolated database, identity, media-storage,
-and server-side authorisation adapters.
+The workspace includes seeded SOPs and competency records so the module is
+immediately explorable. New SOPs, their ordered steps, and associated images are
+stored in Netlify Database (Postgres). Operator progress and demonstration-only
+state continue to use the current browser's `localStorage`.
 
 ### VivaDocs architecture and assumptions
 
 - `app/vivadocs/page.tsx` owns the interactive module and demonstration records.
+- `lib/vivadocs-store.ts` persists user-created VivaDocs content in Netlify Database.
+- `netlify/database/migrations/` contains the Postgres schema Netlify applies during deploys.
 - `app/globals.css` contains the responsive Vivad SPARK design system.
 - Document states follow Draft → In review → Approved → Published.
 - Published SOPs can be completed step-by-step and create a local audit event.
@@ -33,8 +33,8 @@ protect mutations against CSRF and abuse, make published revisions immutable in
 database transactions, and retain audit events in append-only server storage.
 
 A clean full-stack starter running on
-[vinext](https://github.com/cloudflare/vinext), with optional Cloudflare D1 and
-Drizzle support.
+[vinext](https://github.com/cloudflare/vinext), with Netlify Postgres storage
+for VivaDocs and Cloudflare Stream for training videos.
 
 ## Prerequisites
 
@@ -53,11 +53,10 @@ This starter does not use `wrangler.jsonc`.
 ## Included Shape
 
 - edit site code under `app/`
-- `.openai/hosting.json` declares optional Sites D1 and R2 bindings
+- `.openai/hosting.json` declares optional bindings for the separate ChatGPT Sites deployment
 - `vite.config.ts` simulates declared bindings for local development
-- `db/schema.ts` starts intentionally empty
-- `examples/d1/` contains an optional D1 example surface
-- `drizzle.config.ts` supports local migration generation when needed
+- `db/schema.ts` describes the Netlify Postgres VivaDocs tables
+- `drizzle.config.ts` generates Postgres migrations into Netlify's migration directory
 
 ## Workspace Auth Headers
 
@@ -127,4 +126,4 @@ actions tied to the current ChatGPT user. Leave public content anonymous.
 ## Learn More
 
 - [vinext Documentation](https://github.com/cloudflare/vinext)
-- [Drizzle D1 Guide](https://orm.drizzle.team/docs/get-started/d1-new)
+- [Netlify Database](https://docs.netlify.com/build/data-and-storage/netlify-database/)

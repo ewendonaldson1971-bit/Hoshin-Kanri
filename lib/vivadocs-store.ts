@@ -1,22 +1,6 @@
+import { getDatabase, MissingDatabaseConnectionError } from "@netlify/database";
+import { Buffer } from "node:buffer";
 import { departmentPrefix, formatSopReference, SopStepInput, StoredSop, validateSopInput } from "./vivadocs-model";
-
-type D1Statement = {
-  bind(...values: unknown[]): D1Statement;
-  first<T = Record<string, unknown>>(): Promise<T | null>;
-  all<T = Record<string, unknown>>(): Promise<{ results: T[] }>;
-  run(): Promise<unknown>;
-};
-
-type SopDatabase = {
-  prepare(sql: string): D1Statement;
-  batch(statements: D1Statement[]): Promise<unknown[]>;
-};
-
-type SopBucket = {
-  get(key: string): Promise<{ body: ReadableStream; httpMetadata?: { contentType?: string }; writeHttpMetadata(headers: Headers): void } | null>;
-  put(key: string, value: ArrayBuffer, options: { httpMetadata: { contentType: string }; customMetadata: Record<string, string> }): Promise<unknown>;
-  delete(key: string): Promise<void>;
-};
 
 const IMAGE_TYPES = new Map([
   ["image/jpeg", "jpg"],
@@ -26,17 +10,50 @@ const IMAGE_TYPES = new Map([
 ]);
 const MAX_IMAGE_BYTES = 8 * 1024 * 1024;
 
+type QueryResult<T> = { rows: T[] };
+type QueryClient = {
+  query<T extends Record<string, unknown> = Record<string, unknown>>(text: string, values?: unknown[]): Promise<QueryResult<T>>;
+  release(): void;
+};
+type PreparedStep = SopStepInput & {
+  imageKey: string | null;
+  imageName: string | null;
+  imageType: string | null;
+  imageData: Buffer | null;
+};
+
+let cachedDatabase: ReturnType<typeof getDatabase> | undefined;
+
 export class VivaDocsConfigurationError extends Error {}
 export class VivaDocsValidationError extends Error {
   constructor(public errors: string[]) { super(errors.join(" ")); }
 }
 
-async function bindings() {
-  const { env } = await import("cloudflare:workers");
-  const db = env.DB as unknown as SopDatabase | undefined;
-  const assets = env.SOP_ASSETS as unknown as SopBucket | undefined;
-  if (!db || !assets) throw new VivaDocsConfigurationError("VivaDocs storage is not configured.");
-  return { db, assets };
+function database() {
+  try {
+    cachedDatabase ??= getDatabase();
+    return cachedDatabase;
+  } catch (error) {
+    if (error instanceof MissingDatabaseConnectionError) {
+      throw new VivaDocsConfigurationError("VivaDocs storage is not configured. Connect Netlify Database to this site.");
+    }
+    throw error;
+  }
+}
+
+async function transaction<T>(operation: (client: QueryClient) => Promise<T>) {
+  const client = await database().pool.connect() as unknown as QueryClient;
+  try {
+    await client.query("BEGIN");
+    const result = await operation(client);
+    await client.query("COMMIT");
+    return result;
+  } catch (error) {
+    await client.query("ROLLBACK");
+    throw error;
+  } finally {
+    client.release();
+  }
 }
 
 export async function parseSopRequest(request: Request) {
@@ -62,111 +79,110 @@ export async function parseSopRequest(request: Request) {
 }
 
 export async function createSop(request: Request) {
-  const { db, assets } = await bindings();
   const { input, files } = await parseSopRequest(request);
   const prefix = departmentPrefix(input.department);
-  const counter = await db.prepare(`INSERT INTO sop_counters (department, prefix, last_number)
-    VALUES (?, ?, 1)
-    ON CONFLICT(department) DO UPDATE SET last_number = last_number + 1
-    RETURNING last_number`).bind(input.department, prefix).first<{ last_number: number }>();
-  if (!counter?.last_number) throw new Error("Could not allocate an SOP reference.");
-
   const id = crypto.randomUUID();
-  const reference = formatSopReference(prefix, counter.last_number);
   const timestamp = new Date().toISOString();
-  const uploaded: string[] = [];
-  try {
-    const steps = await prepareStepAssets(id, input.steps, files, assets, uploaded);
-    const statements = [
-      db.prepare(`INSERT INTO sops
-        (id, reference, title, department, author, created_date, version, review_date, status, created_at, updated_at)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'Published', ?, ?)`).bind(
-        id, reference, input.title, input.department, input.author, input.createdDate, input.version,
-        input.reviewDate || null, timestamp, timestamp,
-      ),
-      ...steps.map((step, index) => db.prepare(`INSERT INTO sop_steps
-        (id, sop_id, position, instruction, image_key, image_name, image_type, image_caption)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?)`).bind(
-        step.id, id, index + 1, step.instruction, step.imageKey, step.imageName, step.imageType, step.imageCaption || null,
-      )),
-    ];
-    await db.batch(statements);
-  } catch (error) {
-    await Promise.allSettled(uploaded.map((key) => assets.delete(key)));
-    throw error;
-  }
+  const steps = await prepareStepAssets(id, input.steps, files);
+
+  await transaction(async (client) => {
+    const counterResult = await client.query<{ last_number: number }>(`INSERT INTO sop_counters (department, prefix, last_number)
+      VALUES ($1, $2, 1)
+      ON CONFLICT(department) DO UPDATE SET prefix = EXCLUDED.prefix, last_number = sop_counters.last_number + 1
+      RETURNING last_number`, [input.department, prefix]);
+    const counter = counterResult.rows[0];
+    if (!counter?.last_number) throw new Error("Could not allocate an SOP reference.");
+    const reference = formatSopReference(prefix, counter.last_number);
+
+    await client.query(`INSERT INTO sops
+      (id, reference, title, department, author, created_date, version, review_date, status, created_at, updated_at)
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, 'Published', $9, $10)`, [
+      id, reference, input.title, input.department, input.author, input.createdDate, input.version,
+      input.reviewDate || null, timestamp, timestamp,
+    ]);
+    await insertSteps(client, id, steps, timestamp);
+  });
   return getSop(id);
 }
 
 export async function updateSop(id: string, request: Request) {
-  const { db, assets } = await bindings();
   const existing = await getSop(id);
   if (!existing) return null;
   const { input, files } = await parseSopRequest(request);
-  const existingKeys = new Set(existing.steps.map((step) => step.existingImageKey).filter(Boolean) as string[]);
+  const existingImages = new Map(existing.steps
+    .filter((step) => step.existingImageKey)
+    .map((step) => [step.existingImageKey as string, { imageName: step.imageName ?? null, imageType: step.imageType ?? null }]));
   for (const [index, step] of input.steps.entries()) {
-    if (step.existingImageKey && !existingKeys.has(step.existingImageKey)) {
+    if (step.existingImageKey && !existingImages.has(step.existingImageKey)) {
       throw new VivaDocsValidationError([`Step ${index + 1} refers to an invalid image.`]);
     }
   }
-  const uploaded: string[] = [];
   const timestamp = new Date().toISOString();
-  try {
-    const steps = await prepareStepAssets(id, input.steps, files, assets, uploaded);
-    await db.batch([
-      db.prepare(`UPDATE sops SET title = ?, department = ?, author = ?, created_date = ?, version = ?, review_date = ?, updated_at = ? WHERE id = ?`).bind(
-        input.title, input.department, input.author, input.createdDate, input.version, input.reviewDate || null, timestamp, id,
-      ),
-      db.prepare("DELETE FROM sop_steps WHERE sop_id = ?").bind(id),
-      ...steps.map((step, index) => db.prepare(`INSERT INTO sop_steps
-        (id, sop_id, position, instruction, image_key, image_name, image_type, image_caption)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?)`).bind(
-        step.id, id, index + 1, step.instruction, step.imageKey, step.imageName, step.imageType, step.imageCaption || null,
-      )),
-    ]);
-    const retained = new Set(steps.map((step) => step.imageKey).filter(Boolean));
-    await Promise.allSettled([...existingKeys].filter((key) => !retained.has(key)).map((key) => assets.delete(key)));
-  } catch (error) {
-    await Promise.allSettled(uploaded.map((key) => assets.delete(key)));
-    throw error;
-  }
+  const steps = await prepareStepAssets(id, input.steps, files, existingImages);
+
+  await transaction(async (client) => {
+    await client.query(`UPDATE sops
+      SET title = $1, department = $2, author = $3, created_date = $4, version = $5, review_date = $6, updated_at = $7
+      WHERE id = $8`, [input.title, input.department, input.author, input.createdDate, input.version, input.reviewDate || null, timestamp, id]);
+    await client.query("DELETE FROM sop_steps WHERE sop_id = $1", [id]);
+    await insertSteps(client, id, steps, timestamp);
+    const retainedKeys = steps.map((step) => step.imageKey).filter((key): key is string => Boolean(key));
+    if (retainedKeys.length) {
+      await client.query("DELETE FROM sop_assets WHERE sop_id = $1 AND NOT (key = ANY($2::text[]))", [id, retainedKeys]);
+    } else {
+      await client.query("DELETE FROM sop_assets WHERE sop_id = $1", [id]);
+    }
+  });
   return getSop(id);
+}
+
+async function insertSteps(client: QueryClient, sopId: string, steps: PreparedStep[], timestamp: string) {
+  for (const [index, step] of steps.entries()) {
+    if (step.imageKey && step.imageData) {
+      await client.query(`INSERT INTO sop_assets
+        (key, sop_id, step_id, data, content_type, original_name, created_at)
+        VALUES ($1, $2, $3, $4, $5, $6, $7)`, [
+        step.imageKey, sopId, step.id, step.imageData, step.imageType, step.imageName, timestamp,
+      ]);
+    }
+    await client.query(`INSERT INTO sop_steps
+      (id, sop_id, position, instruction, image_key, image_name, image_type, image_caption)
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`, [
+      step.id, sopId, index + 1, step.instruction, step.imageKey, step.imageName, step.imageType, step.imageCaption || null,
+    ]);
+  }
 }
 
 async function prepareStepAssets(
   sopId: string,
   steps: SopStepInput[],
   files: Map<string, File>,
-  assets: SopBucket,
-  uploaded: string[],
-) {
+  existingImages = new Map<string, { imageName: string | null; imageType: string | null }>(),
+): Promise<PreparedStep[]> {
   return Promise.all(steps.map(async (step) => {
     const file = step.uploadKey ? files.get(step.uploadKey) : undefined;
     let imageKey = step.existingImageKey || null;
-    let imageName: string | null = null;
-    let imageType: string | null = null;
+    let imageName = imageKey ? existingImages.get(imageKey)?.imageName ?? null : null;
+    let imageType = imageKey ? existingImages.get(imageKey)?.imageType ?? null : null;
+    let imageData: Buffer | null = null;
     if (file) {
       const extension = IMAGE_TYPES.get(file.type.toLowerCase())!;
       imageKey = `sops/${sopId}/${step.id}/${crypto.randomUUID()}.${extension}`;
       imageName = file.name.slice(0, 180);
       imageType = file.type;
-      await assets.put(imageKey, await file.arrayBuffer(), {
-        httpMetadata: { contentType: file.type },
-        customMetadata: { sopId, stepId: step.id, originalName: imageName },
-      });
-      uploaded.push(imageKey);
+      imageData = Buffer.from(await file.arrayBuffer());
     }
-    return { ...step, imageKey, imageName, imageType };
+    return { ...step, imageKey, imageName, imageType, imageData };
   }));
 }
 
 export async function listSops() {
-  const { db } = await bindings();
-  const rows = await db.prepare(`SELECT s.id, s.reference, s.title, s.department, s.author, s.created_date,
+  const result = await database().pool.query(`SELECT s.id, s.reference, s.title, s.department, s.author, s.created_date,
     s.version, s.review_date, s.status, s.created_at, s.updated_at, COUNT(st.id) AS step_count
     FROM sops s LEFT JOIN sop_steps st ON st.sop_id = s.id
-    GROUP BY s.id ORDER BY s.updated_at DESC`).all<Record<string, unknown>>();
-  return rows.results.map((row) => ({
+    GROUP BY s.id ORDER BY s.updated_at DESC`);
+  const rows = result.rows as Record<string, unknown>[];
+  return rows.map((row) => ({
     id: String(row.id), reference: String(row.reference), title: String(row.title), department: String(row.department),
     author: String(row.author), createdDate: String(row.created_date), version: String(row.version),
     reviewDate: row.review_date ? String(row.review_date) : "", status: String(row.status),
@@ -175,16 +191,18 @@ export async function listSops() {
 }
 
 export async function getSop(id: string): Promise<StoredSop | null> {
-  const { db } = await bindings();
-  const sop = await db.prepare("SELECT * FROM sops WHERE id = ?").bind(id).first<Record<string, unknown>>();
+  const db = database();
+  const sopResult = await db.pool.query("SELECT * FROM sops WHERE id = $1", [id]);
+  const sop = sopResult.rows[0] as Record<string, unknown> | undefined;
   if (!sop) return null;
-  const stepRows = await db.prepare("SELECT * FROM sop_steps WHERE sop_id = ? ORDER BY position").bind(id).all<Record<string, unknown>>();
+  const stepResult = await db.pool.query("SELECT * FROM sop_steps WHERE sop_id = $1 ORDER BY position", [id]);
+  const stepRows = stepResult.rows as Record<string, unknown>[];
   return {
     id: String(sop.id), reference: String(sop.reference), title: String(sop.title), department: String(sop.department) as StoredSop["department"],
     author: String(sop.author), createdDate: String(sop.created_date), version: String(sop.version),
     reviewDate: sop.review_date ? String(sop.review_date) : "", status: String(sop.status),
     createdAt: String(sop.created_at), updatedAt: String(sop.updated_at),
-    steps: stepRows.results.map((step) => ({
+    steps: stepRows.map((step) => ({
       id: String(step.id), position: Number(step.position), instruction: String(step.instruction),
       imageCaption: step.image_caption ? String(step.image_caption) : "",
       existingImageKey: step.image_key ? String(step.image_key) : null,
@@ -196,6 +214,15 @@ export async function getSop(id: string): Promise<StoredSop | null> {
 }
 
 export async function getSopAsset(key: string) {
-  const { assets } = await bindings();
-  return assets.get(key);
+  const result = await database().pool.query(
+    "SELECT data, content_type, original_name FROM sop_assets WHERE key = $1",
+    [key],
+  );
+  const asset = result.rows[0] as Record<string, unknown> | undefined;
+  if (!asset) return null;
+  return {
+    data: Buffer.isBuffer(asset.data) ? asset.data : Buffer.from(asset.data as Uint8Array),
+    contentType: String(asset.content_type),
+    originalName: String(asset.original_name),
+  };
 }

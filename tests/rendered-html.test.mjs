@@ -105,12 +105,16 @@ test("provides public access to the Stream and YouTube video uploader", async ()
 });
 
 test("includes the interactive VivaDocs controlled-document workspace", async () => {
-  const [page, strategy, quality, training, css] = await Promise.all([
+  const [page, strategy, quality, training, css, store, imageRoute, migration, uploadRoute] = await Promise.all([
     readFile(new URL("../app/vivadocs/page.tsx", import.meta.url), "utf8"),
     readFile(new URL("../app/strategy/page.tsx", import.meta.url), "utf8"),
     readFile(new URL("../app/quality/page.tsx", import.meta.url), "utf8"),
     readFile(new URL("../app/training/page.tsx", import.meta.url), "utf8"),
     readFile(new URL("../app/globals.css", import.meta.url), "utf8"),
+    readFile(new URL("../lib/vivadocs-store.ts", import.meta.url), "utf8"),
+    readFile(new URL("../app/api/vivadocs/images/[...key]/route.ts", import.meta.url), "utf8"),
+    readFile(new URL("../netlify/database/migrations/0001_create_vivadocs.sql", import.meta.url), "utf8"),
+    readFile(new URL("../app/api/training/upload/route.ts", import.meta.url), "utf8"),
   ]);
 
   assert.match(page, /VivaDocs/);
@@ -138,6 +142,13 @@ test("includes the interactive VivaDocs controlled-document workspace", async ()
   assert.match(training, /navigationItem\("vivadocs"\)\.href/);
   assert.match(css, /\.vivadocs-shell/);
   assert.match(css, /\.operator-player/);
+  assert.match(store, /from "@netlify\/database"/);
+  assert.doesNotMatch(store, /cloudflare:workers|SOP_ASSETS|D1/);
+  assert.match(store, /INSERT INTO sop_assets/);
+  assert.match(imageRoute, /asset\.contentType/);
+  assert.match(migration, /CREATE TABLE IF NOT EXISTS sops/);
+  assert.match(migration, /data BYTEA NOT NULL/);
+  assert.match(uploadRoute, /api\.cloudflare\.com\/client\/v4\/accounts/);
 });
 
 test("mobile workspace drawer covers routes, state and accessible closing behaviour", async () => {
@@ -176,16 +187,15 @@ test("mobile workspace drawer covers routes, state and accessible closing behavi
 });
 
 test("VivaDocs provides durable SOP creation, media and PDF workflows without QR links", async () => {
-  const [workflow, pdfActions, model, store, schema, migration, routes, css, hosting] = await Promise.all([
+  const [workflow, pdfActions, model, store, schema, migration, routes, css] = await Promise.all([
     readFile(new URL("../app/vivadocs/sop-workflow.tsx", import.meta.url), "utf8"),
     readFile(new URL("../app/vivadocs/sop-pdf-actions.tsx", import.meta.url), "utf8"),
     readFile(new URL("../lib/vivadocs-model.ts", import.meta.url), "utf8"),
     readFile(new URL("../lib/vivadocs-store.ts", import.meta.url), "utf8"),
     readFile(new URL("../db/schema.ts", import.meta.url), "utf8"),
-    readFile(new URL("../drizzle/0000_lethal_multiple_man.sql", import.meta.url), "utf8"),
+    readFile(new URL("../netlify/database/migrations/0001_create_vivadocs.sql", import.meta.url), "utf8"),
     readFile(new URL("../app/api/vivadocs/sops/route.ts", import.meta.url), "utf8"),
     readFile(new URL("../app/globals.css", import.meta.url), "utf8"),
-    readFile(new URL("../.openai/hosting.json", import.meta.url), "utf8"),
   ]);
 
   const departments = [
@@ -197,19 +207,22 @@ test("VivaDocs provides durable SOP creation, media and PDF workflows without QR
     assert.match(model, new RegExp(`prefix: "${prefix}"`));
   }
   assert.match(model, /padStart\(6, "0"\)/);
-  assert.match(store, /ON CONFLICT\(department\) DO UPDATE SET last_number = last_number \+ 1/);
+  assert.match(store, /from "@netlify\/database"/);
+  assert.match(store, /ON CONFLICT\(department\) DO UPDATE SET prefix = EXCLUDED\.prefix, last_number = sop_counters\.last_number \+ 1/);
   assert.match(store, /RETURNING last_number/);
   assert.match(schema, /uniqueIndex\("idx_sops_reference"\)/);
   assert.match(schema, /uniqueIndex\("idx_sop_steps_position"\)/);
-  assert.match(migration, /CREATE TABLE `sop_counters`/);
-  assert.match(migration, /CREATE UNIQUE INDEX `idx_sops_reference`/);
-  assert.match(store, /Promise\.allSettled\(uploaded\.map/);
+  assert.match(schema, /pgTable\("sop_assets"/);
+  assert.match(migration, /CREATE TABLE IF NOT EXISTS sop_counters/);
+  assert.match(migration, /CREATE TABLE IF NOT EXISTS sop_assets/);
+  assert.match(migration, /data BYTEA NOT NULL/);
+  assert.match(store, /await client\.query\("ROLLBACK"\)/);
+  assert.match(store, /INSERT INTO sop_assets/);
   assert.match(store, /IMAGE_TYPES/);
   assert.match(store, /MAX_IMAGE_BYTES = 8 \* 1024 \* 1024/);
   assert.match(store, /existingImageKey/);
   assert.match(routes, /export async function POST/);
-  assert.match(hosting, /"d1": "DB"/);
-  assert.match(hosting, /"r2": "SOP_ASSETS"/);
+  assert.doesNotMatch(store, /cloudflare:workers|SOP_ASSETS|D1/);
 
   assert.match(workflow, /Add Next Step/);
   assert.match(workflow, /position: current\.steps\.length \+ 1/);

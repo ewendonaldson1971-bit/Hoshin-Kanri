@@ -1,12 +1,19 @@
-import { index, integer, sqliteTable, text, uniqueIndex } from "drizzle-orm/sqlite-core";
+import { Buffer } from "node:buffer";
+import { customType, index, integer, pgTable, text, uniqueIndex } from "drizzle-orm/pg-core";
 
-export const sopCounters = sqliteTable("sop_counters", {
+const bytea = customType<{ data: Buffer }>({
+  dataType() {
+    return "bytea";
+  },
+});
+
+export const sopCounters = pgTable("sop_counters", {
   department: text("department").primaryKey(),
   prefix: text("prefix").notNull(),
   lastNumber: integer("last_number").notNull().default(0),
 });
 
-export const sops = sqliteTable("sops", {
+export const sops = pgTable("sops", {
   id: text("id").primaryKey(),
   reference: text("reference").notNull(),
   title: text("title").notNull(),
@@ -23,12 +30,24 @@ export const sops = sqliteTable("sops", {
   index("idx_sops_department_created").on(table.department, table.createdAt),
 ]);
 
-export const sopSteps = sqliteTable("sop_steps", {
+export const sopAssets = pgTable("sop_assets", {
+  key: text("key").primaryKey(),
+  sopId: text("sop_id").notNull().references(() => sops.id, { onDelete: "cascade" }),
+  stepId: text("step_id").notNull(),
+  data: bytea("data").notNull(),
+  contentType: text("content_type").notNull(),
+  originalName: text("original_name").notNull(),
+  createdAt: text("created_at").notNull(),
+}, (table) => [
+  index("idx_sop_assets_sop_id").on(table.sopId),
+]);
+
+export const sopSteps = pgTable("sop_steps", {
   id: text("id").primaryKey(),
   sopId: text("sop_id").notNull().references(() => sops.id, { onDelete: "cascade" }),
   position: integer("position").notNull(),
   instruction: text("instruction").notNull(),
-  imageKey: text("image_key"),
+  imageKey: text("image_key").references(() => sopAssets.key, { onDelete: "set null" }),
   imageName: text("image_name"),
   imageType: text("image_type"),
   imageCaption: text("image_caption"),
