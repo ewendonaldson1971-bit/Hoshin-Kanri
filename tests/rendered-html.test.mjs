@@ -113,7 +113,7 @@ test("includes the interactive VivaDocs controlled-document workspace", async ()
     readFile(new URL("../app/globals.css", import.meta.url), "utf8"),
     readFile(new URL("../lib/vivadocs-store.ts", import.meta.url), "utf8"),
     readFile(new URL("../app/api/vivadocs/images/[...key]/route.ts", import.meta.url), "utf8"),
-    readFile(new URL("../netlify/database/migrations/0001_create_vivadocs.sql", import.meta.url), "utf8"),
+    readFile(new URL("../netlify/database/migrations/20260814045400_create_vivadocs/migration.sql", import.meta.url), "utf8"),
     readFile(new URL("../app/api/training/upload/route.ts", import.meta.url), "utf8"),
   ]);
 
@@ -193,7 +193,7 @@ test("VivaDocs provides durable SOP creation, media and PDF workflows without QR
     readFile(new URL("../lib/vivadocs-model.ts", import.meta.url), "utf8"),
     readFile(new URL("../lib/vivadocs-store.ts", import.meta.url), "utf8"),
     readFile(new URL("../db/schema.ts", import.meta.url), "utf8"),
-    readFile(new URL("../netlify/database/migrations/0001_create_vivadocs.sql", import.meta.url), "utf8"),
+    readFile(new URL("../netlify/database/migrations/20260814045400_create_vivadocs/migration.sql", import.meta.url), "utf8"),
     readFile(new URL("../app/api/vivadocs/sops/route.ts", import.meta.url), "utf8"),
     readFile(new URL("../app/globals.css", import.meta.url), "utf8"),
   ]);

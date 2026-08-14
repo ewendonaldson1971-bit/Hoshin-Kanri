@@ -42,3 +42,6 @@ tsconfig.tsbuildinfo
 /.wrangler/
 /outputs/
 /work/
+
+# Local Netlify folder
+.netlify
