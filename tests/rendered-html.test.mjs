@@ -129,6 +129,10 @@ test("includes the interactive VivaDocs controlled-document workspace", async ()
   assert.match(page, /Visual instruction for Step/);
   assert.match(page, /<SopPdfActions sop=\{selected\} compact/);
   assert.match(page, /Submit completion/);
+  assert.match(
+    page,
+    /function completeRun\(\)[\s\S]*setToast\("Procedure completion recorded\."\);[\s\S]*setView\("SOP library"\);/,
+  );
   assert.match(strategy, /href="\/vivadocs"/);
   assert.match(quality, /navigationItem\("vivadocs"\)\.href/);
   assert.match(training, /navigationItem\("vivadocs"\)\.href/);

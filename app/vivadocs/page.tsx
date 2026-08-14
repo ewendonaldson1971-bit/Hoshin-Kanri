@@ -442,6 +442,7 @@ export default function VivaDocsPage() {
       `Completed successfully at ${nowLabel()} by Rubin Sekuleski.`,
     );
     setToast("Procedure completion recorded.");
+    setView("SOP library");
   }
 
   return (
