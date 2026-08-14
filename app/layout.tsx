@@ -1,6 +1,14 @@
 import type { Metadata } from "next";
 import { headers } from "next/headers";
+import { redirect } from "next/navigation";
+import {
+  authEnv,
+  getHoshinSessionUsername,
+  safeReturnPath,
+} from "../lib/auth/hoshin-auth";
 import "./globals.css";
+
+export const dynamic = "force-dynamic";
 
 export async function generateMetadata(): Promise<Metadata> {
   const requestHeaders = await headers();
@@ -29,7 +37,22 @@ export async function generateMetadata(): Promise<Metadata> {
   };
 }
 
-export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
+export default async function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
+  const requestHeaders = await headers();
+  const username = await getHoshinSessionUsername(
+    requestHeaders.get("cookie") ?? "",
+    authEnv(),
+  );
+
+  if (!username) {
+    const returnTo = safeReturnPath(
+      requestHeaders.get("x-forwarded-uri") ??
+        requestHeaders.get("x-original-url") ??
+        "/",
+    );
+    redirect(`/hoshin-login?return_to=${encodeURIComponent(returnTo)}`);
+  }
+
   return (
     <html lang="en">
       <body>{children}</body>
