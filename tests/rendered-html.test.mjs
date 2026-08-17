@@ -145,7 +145,7 @@ test("includes the interactive VivaDocs controlled-document workspace", async ()
   assert.match(page, /Submit completion/);
   assert.match(
     page,
-    /function completeRun\(\)[\s\S]*setToast\("Procedure completion recorded\."\);[\s\S]*setView\("SOP library"\);/,
+    /async function completeRun\(\)[\s\S]*action: "completeSop"[\s\S]*skills matrix updated[\s\S]*setView\("SOP library"\);/,
   );
   assert.match(strategy, /href="\/vivadocs"/);
   assert.match(quality, /navigationItem\("vivadocs"\)\.href/);
@@ -159,6 +159,43 @@ test("includes the interactive VivaDocs controlled-document workspace", async ()
   assert.match(migration, /CREATE TABLE IF NOT EXISTS sops/);
   assert.match(migration, /data BYTEA NOT NULL/);
   assert.match(uploadRoute, /api\.cloudflare\.com\/client\/v4\/accounts/);
+});
+
+test("VivaDocs skills matrix is department-scoped, editable and updated by SOP completion", async () => {
+  const [page, skills, route, store, migration, css] = await Promise.all([
+    readFile(new URL("../app/vivadocs/page.tsx", import.meta.url), "utf8"),
+    readFile(new URL("../app/vivadocs/skills-matrix.tsx", import.meta.url), "utf8"),
+    readFile(new URL("../app/api/vivadocs/skills/route.ts", import.meta.url), "utf8"),
+    readFile(new URL("../lib/vivadocs-skills-store.ts", import.meta.url), "utf8"),
+    readFile(new URL("../netlify/database/migrations/20260817020000_create_vivadocs_skills/migration.sql", import.meta.url), "utf8"),
+    readFile(new URL("../app/globals.css", import.meta.url), "utf8"),
+  ]);
+
+  for (const department of ["CST", "Prepress", "Printers", "Cutters", "Fab1", "Framing", "Sew", "Light Box", "Office", "Despatch"]) {
+    assert.match(skills, new RegExp(`"${department}"`));
+  }
+  assert.match(skills, /aria-label="Select department"/);
+  assert.match(skills, /sop\.category === department && sop\.status === "Published"/);
+  assert.match(skills, /person\.department === department/);
+  assert.match(skills, /Add person/);
+  assert.match(skills, /Transfer person/);
+  assert.match(skills, /Remove person/);
+  assert.match(skills, /Update training record/);
+  assert.match(skills, /event\.key === "Escape"/);
+  assert.match(route, /case "addPerson"/);
+  assert.match(route, /case "transferPerson"/);
+  assert.match(route, /case "removePerson"/);
+  assert.match(route, /case "updateTraining"/);
+  assert.match(route, /case "completeSop"/);
+  assert.match(store, /ELSE 'Competent'/);
+  assert.match(store, /source = 'SOP completion'/);
+  assert.match(page, /personName: currentUser/);
+  assert.match(migration, /CREATE TABLE IF NOT EXISTS vivadocs_people/);
+  assert.match(migration, /CREATE TABLE IF NOT EXISTS vivadocs_training_records/);
+  assert.match(migration, /UNIQUE \(person_id, sop_id\)/);
+  assert.match(css, /\.skills-toolbar/);
+  assert.match(css, /\.skills-table-scroll/);
+  assert.match(css, /\.skills-modal/);
 });
 
 test("mobile workspace drawer covers routes, state and accessible closing behaviour", async () => {

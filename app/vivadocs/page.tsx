@@ -8,6 +8,7 @@ import {
 } from "../components/workspace-navigation";
 import { SopWorkflow } from "./sop-workflow";
 import { SopPdfActions } from "./sop-pdf-actions";
+import { SkillsMatrix } from "./skills-matrix";
 
 type Status = "Draft" | "In review" | "Approved" | "Published";
 type View =
@@ -90,33 +91,6 @@ const activeSeedAudit = seedAudit.filter(
     ),
 );
 
-const skills = [
-  {
-    person: "Jordan Lee",
-    initials: "JL",
-    role: "Line operator",
-    values: ["Competent", "In training", "Competent", "Missing"],
-  },
-  {
-    person: "Amelia Ross",
-    initials: "AR",
-    role: "Team leader",
-    values: ["Trainer", "Competent", "Competent", "Competent"],
-  },
-  {
-    person: "Kai Morgan",
-    initials: "KM",
-    role: "Warehouse",
-    values: ["In training", "Competent", "Missing", "Expired"],
-  },
-  {
-    person: "Priya Shah",
-    initials: "PS",
-    role: "Quality tech",
-    values: ["Competent", "Missing", "Trainer", "Competent"],
-  },
-];
-
 function statusTone(status: Status) {
   return status.toLowerCase().replace(" ", "-");
 }
@@ -140,6 +114,8 @@ export default function VivaDocsPage() {
   const [runStep, setRunStep] = useState(0);
   const [responses, setResponses] = useState<Record<number, string>>({});
   const [completionMessage, setCompletionMessage] = useState("");
+  const [completionBusy, setCompletionBusy] = useState(false);
+  const [currentUser, setCurrentUser] = useState("Rubin Sekuleski");
   const [toast, setToast] = useState("");
 
   useEffect(() => {
@@ -161,6 +137,12 @@ export default function VivaDocsPage() {
       }
     }
     void syncStoredSops();
+    void fetch("/api/auth/session", { cache: "no-store" })
+      .then((response) => response.json())
+      .then((session: { username?: string }) => {
+        if (session.username?.trim()) setCurrentUser(session.username.trim());
+      })
+      .catch(() => undefined);
   }, []);
 
   useEffect(() => {
@@ -299,19 +281,43 @@ export default function VivaDocsPage() {
     setView("Operator mode");
   }
 
-  function completeRun() {
+  async function completeRun() {
     if (!running) return;
     const complete = running.steps.every((_, index) => responses[index]);
     if (!complete) {
       setCompletionMessage("Complete each step before submitting this run.");
       return;
     }
-    record("Procedure completed", `${running.reference} · ${running.title}`);
-    setCompletionMessage(
-      `Completed successfully at ${nowLabel()} by Rubin Sekuleski.`,
-    );
-    setToast("Procedure completion recorded.");
-    setView("SOP library");
+    setCompletionBusy(true);
+    try {
+      const response = await fetch("/api/vivadocs/skills", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          action: "completeSop",
+          sopId: running.id,
+          personName: currentUser,
+        }),
+      });
+      const result = (await response.json()) as { error?: string };
+      if (!response.ok) {
+        throw new Error(result.error || "Could not record this SOP completion.");
+      }
+      record("Procedure completed", `${running.reference} · ${running.title}`);
+      setCompletionMessage(
+        `Completed successfully at ${nowLabel()} by ${currentUser}.`,
+      );
+      setToast("Procedure completion recorded and skills matrix updated.");
+      setView("SOP library");
+    } catch (error) {
+      setCompletionMessage(
+        error instanceof Error
+          ? error.message
+          : "Could not record this SOP completion.",
+      );
+    } finally {
+      setCompletionBusy(false);
+    }
   }
 
   return (
@@ -911,18 +917,19 @@ export default function VivaDocsPage() {
                   <button
                     className="complete"
                     type="button"
-                    onClick={completeRun}
+                    disabled={completionBusy}
+                    onClick={() => void completeRun()}
                   >
-                    Submit completion ✓
+                    {completionBusy ? "Recording…" : "Submit completion ✓"}
                   </button>
                 )}
               </div>
               {completionMessage && (
                 <div
                   className={
-                    completionMessage.startsWith("Complete each")
-                      ? "operator-message error"
-                      : "operator-message"
+                    completionMessage.startsWith("Completed successfully")
+                      ? "operator-message"
+                      : "operator-message error"
                   }
                 >
                   {completionMessage}
@@ -939,68 +946,7 @@ export default function VivaDocsPage() {
         )}
 
         {view === "Skills matrix" && (
-          <section className="vivadocs-section">
-            <div className="vivadocs-section-head">
-              <div>
-                <span>CAPABILITY</span>
-                <h2>Skills matrix</h2>
-                <p>Competency against required published procedures.</p>
-              </div>
-              <div className="skills-legend">
-                <span className="competent">● Competent</span>
-                <span className="training">● In training</span>
-                <span className="gap">● Gap</span>
-              </div>
-            </div>
-            <div className="skills-table">
-              <div className="skills-head">
-                <span>Team member</span>
-                {sops.map((sop) => (
-                  <span key={sop.id}>
-                    {sop.reference}
-                    <small>{sop.title}</small>
-                  </span>
-                ))}
-              </div>
-              {skills.map((person) => (
-                <div className="skills-row" key={person.person}>
-                  <span className="skills-person">
-                    <i>{person.initials}</i>
-                    <span>
-                      <strong>{person.person}</strong>
-                      <small>{person.role}</small>
-                    </span>
-                  </span>
-                  {sops.map((sop, index) => {
-                    const value = person.values[index] ?? "Missing";
-                    return (
-                      <button
-                        className={value.toLowerCase().replace(" ", "-")}
-                        type="button"
-                        onClick={() =>
-                          setToast(
-                            `${person.person}: ${value} for ${sop.reference}`,
-                          )
-                        }
-                        key={sop.id}
-                      >
-                        <i>
-                          {value === "Trainer"
-                            ? "★"
-                            : value === "Competent"
-                              ? "✓"
-                              : value === "In training"
-                                ? "◷"
-                                : "!"}
-                        </i>
-                        <span>{value}</span>
-                      </button>
-                    );
-                  })}
-                </div>
-              ))}
-            </div>
-          </section>
+          <SkillsMatrix sops={sops} onToast={setToast} />
         )}
 
         {view === "Audit log" && (

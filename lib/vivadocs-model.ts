@@ -1,14 +1,14 @@
 export const SOP_DEPARTMENTS = [
-  { name: "Prepress", prefix: "PRE" },
   { name: "CST", prefix: "CST" },
+  { name: "Prepress", prefix: "PRE" },
   { name: "Printers", prefix: "PRI" },
   { name: "Cutters", prefix: "CUT" },
   { name: "Fab1", prefix: "FAB" },
-  { name: "Sew", prefix: "SEW" },
-  { name: "Despatch", prefix: "DES" },
-  { name: "Light Box", prefix: "LIG" },
   { name: "Framing", prefix: "FRA" },
+  { name: "Sew", prefix: "SEW" },
+  { name: "Light Box", prefix: "LIG" },
   { name: "Office", prefix: "OFF" },
+  { name: "Despatch", prefix: "DES" },
 ] as const;
 
 export type SopDepartment = (typeof SOP_DEPARTMENTS)[number]["name"];
