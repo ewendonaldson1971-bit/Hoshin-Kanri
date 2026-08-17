@@ -189,7 +189,16 @@ test("VivaDocs skills matrix is department-scoped, editable and updated by SOP c
   assert.match(route, /case "completeSop"/);
   assert.match(store, /ELSE 'Competent'/);
   assert.match(store, /source = 'SOP completion'/);
-  assert.match(page, /personName: currentUser/);
+  assert.match(page, /aria-label="Filter by department"/);
+  assert.match(page, /All departments/);
+  assert.match(page, /sop\.category === department/);
+  assert.match(page, /Select your name &amp; run/);
+  assert.match(page, /async function openRunPicker/);
+  assert.match(page, /person\.department === sop\.category/);
+  assert.match(page, /aria-label="Select your name"/);
+  assert.match(page, /Record name & start SOP/);
+  assert.match(page, /personName: runPersonName/);
+  assert.match(page, /Completing as <strong>\{runPersonName\}<\/strong>/);
   assert.match(migration, /CREATE TABLE IF NOT EXISTS vivadocs_people/);
   assert.match(migration, /CREATE TABLE IF NOT EXISTS vivadocs_training_records/);
   assert.match(migration, /UNIQUE \(person_id, sop_id\)/);

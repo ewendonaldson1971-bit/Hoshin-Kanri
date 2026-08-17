@@ -10,6 +10,19 @@ import { SopWorkflow } from "./sop-workflow";
 import { SopPdfActions } from "./sop-pdf-actions";
 import { SkillsMatrix } from "./skills-matrix";
 
+const DEPARTMENTS = [
+  "CST",
+  "Prepress",
+  "Printers",
+  "Cutters",
+  "Fab1",
+  "Framing",
+  "Sew",
+  "Light Box",
+  "Office",
+  "Despatch",
+] as const;
+
 type Status = "Draft" | "In review" | "Approved" | "Published";
 type View =
   | "Dashboard"
@@ -69,6 +82,13 @@ type StoredSopDetail = StoredSopSummary & {
   }>;
 };
 
+type SkillsPerson = {
+  id: string;
+  name: string;
+  department: string;
+  role: string;
+};
+
 const STORAGE_KEY = "vivadocs-demo-state-v1";
 const REMOVED_DEMO_REFERENCES = new Set([
   "OPS-014",
@@ -108,6 +128,7 @@ export default function VivaDocsPage() {
   const [audit, setAudit] = useState<AuditEvent[]>(activeSeedAudit);
   const [query, setQuery] = useState("");
   const [status, setStatus] = useState("All statuses");
+  const [department, setDepartment] = useState("All departments");
   const [selectedId, setSelectedId] = useState(activeSeedSops[0]?.id ?? "");
   const [createOpen, setCreateOpen] = useState(false);
   const [runId, setRunId] = useState(activeSeedSops[0]?.id ?? "");
@@ -116,6 +137,11 @@ export default function VivaDocsPage() {
   const [completionMessage, setCompletionMessage] = useState("");
   const [completionBusy, setCompletionBusy] = useState(false);
   const [currentUser, setCurrentUser] = useState("Rubin Sekuleski");
+  const [runPersonName, setRunPersonName] = useState("Rubin Sekuleski");
+  const [runPickerId, setRunPickerId] = useState("");
+  const [runCandidates, setRunCandidates] = useState<SkillsPerson[]>([]);
+  const [runCandidateId, setRunCandidateId] = useState("signed-in-user");
+  const [runPickerLoading, setRunPickerLoading] = useState(false);
   const [toast, setToast] = useState("");
 
   useEffect(() => {
@@ -140,7 +166,10 @@ export default function VivaDocsPage() {
     void fetch("/api/auth/session", { cache: "no-store" })
       .then((response) => response.json())
       .then((session: { username?: string }) => {
-        if (session.username?.trim()) setCurrentUser(session.username.trim());
+        if (session.username?.trim()) {
+          setCurrentUser(session.username.trim());
+          setRunPersonName(session.username.trim());
+        }
       })
       .catch(() => undefined);
   }, []);
@@ -161,6 +190,15 @@ export default function VivaDocsPage() {
     return () => window.clearTimeout(timeout);
   }, []);
 
+  useEffect(() => {
+    if (!runPickerId) return;
+    const close = (event: KeyboardEvent) => {
+      if (event.key === "Escape") setRunPickerId("");
+    };
+    document.addEventListener("keydown", close);
+    return () => document.removeEventListener("keydown", close);
+  }, [runPickerId]);
+
   const filtered = useMemo(
     () =>
       sops.filter((sop) => {
@@ -168,14 +206,17 @@ export default function VivaDocsPage() {
           `${sop.title} ${sop.reference} ${sop.category} ${sop.owner}`.toLowerCase();
         return (
           haystack.includes(query.toLowerCase()) &&
-          (status === "All statuses" || sop.status === status)
+          (status === "All statuses" || sop.status === status) &&
+          (department === "All departments" || sop.category === department)
         );
       }),
-    [query, sops, status],
+    [department, query, sops, status],
   );
 
-  const selected = sops.find((sop) => sop.id === selectedId) ?? sops[0];
+  const selected =
+    filtered.find((sop) => sop.id === selectedId) ?? filtered[0];
   const running = sops.find((sop) => sop.id === runId) ?? sops[0];
+  const runPickerSop = sops.find((sop) => sop.id === runPickerId);
   const published = sops.filter((sop) => sop.status === "Published");
   const approvalQueue = sops.filter(
     (sop) => sop.status === "In review" || sop.status === "Approved",
@@ -242,14 +283,14 @@ export default function VivaDocsPage() {
     }
   }
 
-  function record(action: string, detail: string) {
+  function record(action: string, detail: string, actor = currentUser) {
     setAudit((current) => [
       {
         id: crypto.randomUUID(),
         action,
         detail,
         time: `Today, ${nowLabel()}`,
-        actor: "Rubin Sekuleski",
+        actor,
       },
       ...current,
     ]);
@@ -273,12 +314,52 @@ export default function VivaDocsPage() {
     setToast(`${sop.reference} is now ${next.toLowerCase()}.`);
   }
 
-  function startRun(id: string) {
+  function startRun(id: string, personName = runPersonName || currentUser) {
     setRunId(id);
+    setRunPersonName(personName);
+    setRunPickerId("");
     setRunStep(0);
     setResponses({});
     setCompletionMessage("");
     setView("Operator mode");
+  }
+
+  async function openRunPicker(id: string) {
+    const sop = sops.find((item) => item.id === id);
+    if (!sop) return;
+    setRunPickerId(id);
+    setRunCandidateId("signed-in-user");
+    setRunCandidates([]);
+    setRunPickerLoading(true);
+    try {
+      const response = await fetch("/api/vivadocs/skills", { cache: "no-store" });
+      const result = (await response.json()) as {
+        people?: SkillsPerson[];
+        error?: string;
+      };
+      if (!response.ok) {
+        throw new Error(result.error || "Could not load team members.");
+      }
+      setRunCandidates(
+        (result.people ?? []).filter(
+          (person) => person.department === sop.category,
+        ),
+      );
+    } catch (error) {
+      setToast(
+        error instanceof Error ? error.message : "Could not load team members.",
+      );
+    } finally {
+      setRunPickerLoading(false);
+    }
+  }
+
+  function startSelectedRun() {
+    if (!runPickerSop) return;
+    const selectedPerson = runCandidates.find(
+      (person) => person.id === runCandidateId,
+    );
+    startRun(runPickerSop.id, selectedPerson?.name || currentUser);
   }
 
   async function completeRun() {
@@ -296,16 +377,20 @@ export default function VivaDocsPage() {
         body: JSON.stringify({
           action: "completeSop",
           sopId: running.id,
-          personName: currentUser,
+          personName: runPersonName,
         }),
       });
       const result = (await response.json()) as { error?: string };
       if (!response.ok) {
         throw new Error(result.error || "Could not record this SOP completion.");
       }
-      record("Procedure completed", `${running.reference} · ${running.title}`);
+      record(
+        "Procedure completed",
+        `${running.reference} · ${running.title}`,
+        runPersonName,
+      );
       setCompletionMessage(
-        `Completed successfully at ${nowLabel()} by ${currentUser}.`,
+        `Completed successfully at ${nowLabel()} by ${runPersonName}.`,
       );
       setToast("Procedure completion recorded and skills matrix updated.");
       setView("SOP library");
@@ -598,6 +683,19 @@ export default function VivaDocsPage() {
                 />
               </label>
               <select
+                aria-label="Filter by department"
+                value={department}
+                onChange={(event) => {
+                  setDepartment(event.target.value);
+                  setSelectedId("");
+                }}
+              >
+                <option>All departments</option>
+                {DEPARTMENTS.map((item) => (
+                  <option key={item}>{item}</option>
+                ))}
+              </select>
+              <select
                 aria-label="Filter by status"
                 value={status}
                 onChange={(event) => setStatus(event.target.value)}
@@ -716,9 +814,9 @@ export default function VivaDocsPage() {
                     {selected.status === "Published" && (
                       <button
                         type="button"
-                        onClick={() => startRun(selected.id)}
+                        onClick={() => void openRunPicker(selected.id)}
                       >
-                        Run this SOP <b>▷</b>
+                        Select your name &amp; run <b>▷</b>
                       </button>
                     )}
                     <SopPdfActions sop={selected} compact />
@@ -811,10 +909,14 @@ export default function VivaDocsPage() {
               <div>
                 <span>OPERATOR MODE</span>
                 <h2>Follow a published procedure</h2>
+                <p>
+                  Completing as <strong>{runPersonName}</strong>
+                </p>
               </div>
               <select
+                aria-label="Select published SOP"
                 value={runId}
-                onChange={(event) => startRun(event.target.value)}
+                onChange={(event) => void openRunPicker(event.target.value)}
               >
                 {published.map((sop) => (
                   <option value={sop.id} key={sop.id}>
@@ -988,6 +1090,77 @@ export default function VivaDocsPage() {
         )}
       </main>
 
+      {runPickerSop && (
+        <div
+          className="vivadocs-modal-backdrop"
+          onMouseDown={(event) => {
+            if (event.target === event.currentTarget) setRunPickerId("");
+          }}
+        >
+          <div
+            className="vivadocs-modal run-person-modal"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="run-person-title"
+          >
+            <div>
+              <span>OPERATOR RECORD</span>
+              <button
+                type="button"
+                onClick={() => setRunPickerId("")}
+                aria-label="Close operator selection"
+              >
+                ×
+              </button>
+            </div>
+            <h2 id="run-person-title">Who is completing this SOP?</h2>
+            <p>
+              Choose your name before starting {runPickerSop.reference}. Your
+              completion will update your Skills matrix record.
+            </p>
+            <label>
+              <span>Team member</span>
+              <select
+                autoFocus
+                aria-label="Select your name"
+                value={runCandidateId}
+                disabled={runPickerLoading}
+                onChange={(event) => setRunCandidateId(event.target.value)}
+              >
+                <option value="signed-in-user">
+                  {currentUser} (signed-in user)
+                </option>
+                {runCandidates
+                  .filter(
+                    (person) =>
+                      person.name.toLowerCase() !== currentUser.toLowerCase(),
+                  )
+                  .map((person) => (
+                    <option value={person.id} key={person.id}>
+                      {person.name} · {person.role}
+                    </option>
+                  ))}
+              </select>
+            </label>
+            <div className="vivadocs-modal-note">
+              <b>Department</b>
+              <span>{runPickerSop.category}</span>
+            </div>
+            <footer>
+              <button type="button" onClick={() => setRunPickerId("")}>
+                Cancel
+              </button>
+              <button
+                type="button"
+                disabled={runPickerLoading}
+                onClick={startSelectedRun}
+              >
+                {runPickerLoading ? "Loading names…" : "Record name & start SOP"}
+              </button>
+            </footer>
+          </div>
+        </div>
+      )}
       {createOpen && (
         <SopWorkflow
           onSaved={syncStoredSops}
