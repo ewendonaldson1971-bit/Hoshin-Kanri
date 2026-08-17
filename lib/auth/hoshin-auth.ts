@@ -74,21 +74,61 @@ export function buildHoshinSessionCookie(value: string, url: URL, maxAge: number
 }
 
 export function safeReturnPath(value: string) {
-  if (!value.startsWith("/") || value.startsWith("//")) return "/training";
+  if (!value.startsWith("/") || value.startsWith("//")) return "/";
   try {
     const parsed = new URL(value, "https://hoshin.local");
-    if (parsed.origin !== "https://hoshin.local") return "/training";
-    if ([HOSHIN_LOGIN_PATH, HOSHIN_LOGOUT_PATH].includes(parsed.pathname)) return "/training";
+    if (parsed.origin !== "https://hoshin.local") return "/";
+    if ([HOSHIN_LOGIN_PATH, HOSHIN_LOGOUT_PATH].includes(parsed.pathname)) return "/";
     return `${parsed.pathname}${parsed.search}${parsed.hash}`;
   } catch {
-    return "/training";
+    return "/";
   }
 }
 
 export function renderLoginPage(returnTo: string, errorMessage = "", status = 200) {
   const error = escapeHtml(errorMessage);
-  return new Response(`<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Hoshin sign in</title><style>
-  :root{--red:#e4002b;--dark:#53565a;--line:#dde1e7;--surface:#f5f6fa;--text:#26282c;--muted:#6c717a}*{box-sizing:border-box}body{display:grid;place-items:center;min-height:100vh;margin:0;padding:24px;background:linear-gradient(132deg,transparent 0 62%,rgba(228,0,43,.08) 62% 100%),var(--surface);color:var(--text);font-family:"Open Sans",Arial,sans-serif}main{display:grid;gap:18px;width:min(430px,100%);padding:28px;border:1px solid var(--line);border-radius:10px;background:#fff;box-shadow:0 14px 34px rgba(38,40,44,.08)}img{width:164px;height:auto}p{margin:0;color:var(--red);font-size:.74rem;font-weight:800;text-transform:uppercase}h1{margin:0;color:var(--dark);font-size:1.55rem}form,label{display:grid;gap:12px}label{gap:6px;color:var(--muted);font-size:.78rem;font-weight:800}input{min-height:44px;padding:0 14px;border:1px solid var(--line);border-radius:8px;font:inherit}button{min-height:42px;border:0;border-radius:999px;background:var(--red);color:#fff;font:inherit;font-weight:800;cursor:pointer}.error{padding:10px 12px;border:1px solid #ffd4dc;border-radius:8px;background:#fff1f3;color:#a4001f;font-size:.86rem;font-weight:700}.note{padding-top:12px;border-top:1px solid var(--line);color:var(--muted);font-size:.86rem}</style></head><body><main><img src="/vivad-logo.png" alt="Vivad"><section><p>Hoshin Kanri</p><h1>Sign in to upload</h1></section>${error ? `<div class="error">${error}</div>` : ""}<form method="post" action="${HOSHIN_LOGIN_PATH}"><input type="hidden" name="return_to" value="${escapeHtml(returnTo)}"><label>User name<input name="username" autocomplete="username" autofocus required></label><label>Password<input name="password" type="password" autocomplete="current-password" required></label><button type="submit">Continue to Hoshin</button></form><div class="note">Use the same Vivalux Builder credentials you use for Project Lotus.</div></main></body></html>`, {
+  const action = `${HOSHIN_LOGIN_PATH}?return_to=${encodeURIComponent(returnTo)}`;
+  return new Response(`<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width,initial-scale=1">
+    <title>Vivad SPARK sign in</title>
+    <style>
+      :root{--red:#e4002b;--red-dark:#aa001f;--blue:#348be2;--dark:#53565a;--line:#dde1e7;--surface:#f7f8fa;--text:#2f3336;--muted:#6c717a}
+      *{box-sizing:border-box}
+      html{background:var(--surface)}
+      body{display:grid;place-items:center;min-height:100vh;margin:0;padding:24px;background:linear-gradient(135deg,rgba(228,0,43,.06) 0 18%,transparent 18% 100%),linear-gradient(90deg,rgba(83,86,90,.055) 0 1px,transparent 1px 100%),linear-gradient(0deg,rgba(83,86,90,.045) 0 1px,transparent 1px 100%),var(--surface);background-size:auto,38px 38px,38px 38px,auto;color:var(--text);font-family:"Open Sans","Segoe UI",Arial,sans-serif}
+      main{display:grid;gap:18px;width:min(430px,100%);padding:28px;border:1px solid rgba(83,86,90,.16);border-radius:8px;background:#fff;box-shadow:0 20px 54px rgba(47,51,54,.18)}
+      img{width:164px;height:auto}
+      .eyebrow{margin:0 0 4px;color:var(--red);font-size:.74rem;font-weight:800;text-transform:uppercase}
+      h1{margin:0;color:var(--dark);font-family:Cabin,"Trebuchet MS",Arial,sans-serif;font-size:1.55rem;line-height:1.1}
+      form{display:grid;gap:12px}
+      label{display:grid;gap:7px;color:var(--dark);font-size:.8rem;font-weight:700}
+      input{width:100%;min-height:44px;padding:9px 14px;border:1px solid transparent;border-radius:999px;background:#fff;box-shadow:inset 0 0 0 1px rgba(83,86,90,.14),0 3px 10px rgba(83,86,90,.08);color:var(--text);font:inherit;font-weight:400}
+      input:focus{outline:none;border-color:var(--blue);box-shadow:0 0 0 3px rgba(52,139,226,.22),inset 0 0 0 1px rgba(83,86,90,.14),0 3px 10px rgba(83,86,90,.08)}
+      button{min-height:44px;margin-top:6px;padding:0 18px;border:1px solid var(--red);border-radius:999px;background:var(--red);box-shadow:0 4px 10px rgba(228,0,43,.22);color:#fff;font:inherit;font-size:.86rem;font-weight:700;cursor:pointer;transition:background-color .16s ease,box-shadow .16s ease,transform .16s ease}
+      button:hover,button:focus-visible{background:#f65856;box-shadow:0 8px 18px rgba(228,0,43,.24);outline:none;transform:translateY(-1px)}
+      .error{padding:10px 12px;border:1px solid #ffd4dc;border-radius:8px;background:#fff1f3;color:var(--red-dark);font-size:.86rem;font-weight:700;overflow-wrap:anywhere}
+      .note{padding-top:12px;border-top:1px solid rgba(83,86,90,.14);color:var(--dark);font-size:.86rem;line-height:1.45}
+      @media(max-width:540px){body{padding:16px}main{padding:22px}}
+    </style>
+  </head>
+  <body>
+    <main>
+      <img src="/vivad-logo.png" alt="Vivad" width="164" height="45">
+      <section><p class="eyebrow">Vivad SPARK</p><h1>Sign in</h1></section>
+      ${error ? `<div class="error" role="alert">${error}</div>` : ""}
+      <form method="post" action="${escapeHtml(action)}">
+        <input type="hidden" name="return_to" value="${escapeHtml(returnTo)}">
+        <label>User name<input name="username" type="text" autocomplete="username" autofocus required></label>
+        <label>Password<input name="password" type="password" autocomplete="current-password" required></label>
+        <button type="submit">Open Vivad SPARK</button>
+      </form>
+      <div class="note">Use your Vivalux Builder user name and password.</div>
+    </main>
+  </body>
+</html>`, {
     status,
     headers: { "Cache-Control": "no-store", "Content-Type": "text/html; charset=utf-8", "Content-Security-Policy": "default-src 'none'; img-src 'self'; style-src 'unsafe-inline'; form-action 'self'; base-uri 'none'; frame-ancestors 'none'", "Referrer-Policy": "no-referrer" },
   });

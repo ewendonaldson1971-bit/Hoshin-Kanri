@@ -3,7 +3,7 @@ import { authenticateWithLotus, authEnv, buildHoshinSessionCookie, createHoshinS
 export const dynamic = "force-dynamic";
 
 export async function GET(request: Request) {
-  return renderLoginPage(safeReturnPath(new URL(request.url).searchParams.get("return_to") ?? "/training"));
+  return renderLoginPage(safeReturnPath(new URL(request.url).searchParams.get("return_to") ?? "/"));
 }
 
 export async function POST(request: Request) {
@@ -13,8 +13,8 @@ export async function POST(request: Request) {
   const form = await request.formData();
   const username = String(form.get("username") ?? "").trim();
   const password = String(form.get("password") ?? "").trim();
-  const returnTo = safeReturnPath(String(form.get("return_to") ?? "/training"));
-  if (!secret) return renderLoginPage(returnTo, "Hoshin login is not configured in this environment.", 503);
+  const returnTo = safeReturnPath(String(form.get("return_to") ?? "/"));
+  if (!secret) return renderLoginPage(returnTo, "Vivad SPARK login is not configured in this environment.", 503);
   if (!username || !password) return renderLoginPage(returnTo, "Enter your user name and password.", 400);
 
   const result = await authenticateWithLotus(username, password, env);
@@ -23,7 +23,7 @@ export async function POST(request: Request) {
       invalidCredentials: "User name or password is incorrect.",
       lotusAccessDenied: "Your account is not enabled for Project Lotus.",
       lotusAccessMissing: "The login service could not confirm Lotus access.",
-      serviceUnavailable: "Hoshin could not reach the Lotus login service.",
+      serviceUnavailable: "Vivad SPARK could not reach the login service.",
     };
     return renderLoginPage(returnTo, messages[result.error ?? ""] ?? "Could not check login.", result.error?.startsWith("lotusAccess") ? 403 : 401);
   }

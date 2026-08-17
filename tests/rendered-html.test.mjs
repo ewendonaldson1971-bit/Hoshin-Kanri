@@ -23,18 +23,23 @@ async function render(pathname = "/") {
   );
 }
 
-test("server-renders the Vivad Hoshin workspace", async () => {
+test("requires the shared Apps Script login before rendering Vivad SPARK", async () => {
   const response = await render();
-  assert.equal(response.status, 200);
-  assert.match(response.headers.get("content-type") ?? "", /^text\/html\b/i);
+  assert.equal(response.status, 307);
+  assert.match(response.headers.get("location") ?? "", /\/hoshin-login\?return_to=%2F$/i);
 
-  const html = await response.text();
-  assert.match(html, /<title>Hoshin — Turn Strategy Into Action<\/title>/i);
+  const loginResponse = await render("/hoshin-login");
+  assert.equal(loginResponse.status, 200);
+  assert.match(loginResponse.headers.get("content-type") ?? "", /^text\/html\b/i);
+
+  const html = await loginResponse.text();
+  assert.match(html, /<title>Vivad SPARK sign in<\/title>/i);
   assert.match(html, /src="\/vivad-logo\.png"/i);
-  assert.match(html, /Turn strategy into/i);
-  assert.match(html, /href="\/strategy"/i);
-  assert.match(html, /href="\/quality"/i);
-  assert.doesNotMatch(html, /codex-preview|Your site is taking shape/i);
+  assert.match(html, /<h1>Sign in<\/h1>/i);
+  assert.match(html, /Open Vivad SPARK/i);
+  assert.match(html, /Vivalux Builder user name and password/i);
+  assert.match(html, /autocomplete="username"/i);
+  assert.match(html, /autocomplete="current-password"/i);
 });
 
 test("includes the live Non-Conformance Event workspace", async () => {
