@@ -36,6 +36,7 @@ export type StoredSop = Omit<SopInput, "steps"> & {
   id: string;
   reference: string;
   status: string;
+  availableToAllDepartments: boolean;
   createdAt: string;
   updatedAt: string;
   steps: Array<SopStepInput & {

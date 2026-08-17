@@ -178,7 +178,7 @@ async function prepareStepAssets(
 
 export async function listSops() {
   const result = await database().pool.query(`SELECT s.id, s.reference, s.title, s.department, s.author, s.created_date,
-    s.version, s.review_date, s.status, s.created_at, s.updated_at, COUNT(st.id) AS step_count
+    s.version, s.review_date, s.status, s.available_to_all_departments, s.created_at, s.updated_at, COUNT(st.id) AS step_count
     FROM sops s LEFT JOIN sop_steps st ON st.sop_id = s.id
     GROUP BY s.id ORDER BY s.updated_at DESC`);
   const rows = result.rows as Record<string, unknown>[];
@@ -186,6 +186,7 @@ export async function listSops() {
     id: String(row.id), reference: String(row.reference), title: String(row.title), department: String(row.department),
     author: String(row.author), createdDate: String(row.created_date), version: String(row.version),
     reviewDate: row.review_date ? String(row.review_date) : "", status: String(row.status),
+    availableToAllDepartments: Boolean(row.available_to_all_departments),
     createdAt: String(row.created_at), updatedAt: String(row.updated_at), stepCount: Number(row.step_count),
   }));
 }
@@ -201,6 +202,7 @@ export async function getSop(id: string): Promise<StoredSop | null> {
     id: String(sop.id), reference: String(sop.reference), title: String(sop.title), department: String(sop.department) as StoredSop["department"],
     author: String(sop.author), createdDate: String(sop.created_date), version: String(sop.version),
     reviewDate: sop.review_date ? String(sop.review_date) : "", status: String(sop.status),
+    availableToAllDepartments: Boolean(sop.available_to_all_departments),
     createdAt: String(sop.created_at), updatedAt: String(sop.updated_at),
     steps: stepRows.map((step) => ({
       id: String(step.id), position: Number(step.position), instruction: String(step.instruction),

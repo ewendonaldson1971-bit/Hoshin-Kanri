@@ -42,6 +42,7 @@ type Sop = {
   owner: string;
   revision: string;
   status: Status;
+  availableToAllDepartments: boolean;
   nextReview: string;
   steps: Array<{
     title: string;
@@ -70,6 +71,7 @@ type StoredSopSummary = {
   version: string;
   reviewDate: string;
   status: string;
+  availableToAllDepartments: boolean;
   stepCount: number;
 };
 
@@ -207,7 +209,9 @@ export default function VivaDocsPage() {
         return (
           haystack.includes(query.toLowerCase()) &&
           (status === "All statuses" || sop.status === status) &&
-          (department === "All departments" || sop.category === department)
+          (department === "All departments" ||
+            sop.category === department ||
+            sop.availableToAllDepartments)
         );
       }),
     [department, query, sops, status],
@@ -254,6 +258,7 @@ export default function VivaDocsPage() {
           )
             ? item.status
             : "Published") as Status,
+          availableToAllDepartments: item.availableToAllDepartments,
           nextReview: item.reviewDate || "Not scheduled",
           steps: item.steps.map((step) => ({
             title: `Step ${step.position}`,
@@ -341,8 +346,10 @@ export default function VivaDocsPage() {
         throw new Error(result.error || "Could not load team members.");
       }
       setRunCandidates(
-        (result.people ?? []).filter(
-          (person) => person.department === sop.category,
+        (result.people ?? []).filter((person) =>
+          sop.availableToAllDepartments
+            ? true
+            : person.department === sop.category,
         ),
       );
     } catch (error) {
@@ -728,7 +735,9 @@ export default function VivaDocsPage() {
                       <span>
                         <strong>{sop.title}</strong>
                         <small>
-                          {sop.reference} · {sop.category}
+                          {sop.reference} · {sop.availableToAllDepartments
+                            ? "All departments"
+                            : sop.category}
                         </small>
                       </span>
                     </span>
@@ -775,7 +784,11 @@ export default function VivaDocsPage() {
                     </div>
                     <div>
                       <dt>Location</dt>
-                      <dd>{selected.location}</dd>
+                      <dd>
+                        {selected.availableToAllDepartments
+                          ? "All departments"
+                          : selected.location}
+                      </dd>
                     </div>
                     <div>
                       <dt>Steps</dt>
@@ -1138,13 +1151,20 @@ export default function VivaDocsPage() {
                   .map((person) => (
                     <option value={person.id} key={person.id}>
                       {person.name} · {person.role}
+                      {runPickerSop.availableToAllDepartments
+                        ? ` · ${person.department}`
+                        : ""}
                     </option>
                   ))}
               </select>
             </label>
             <div className="vivadocs-modal-note">
               <b>Department</b>
-              <span>{runPickerSop.category}</span>
+              <span>
+                {runPickerSop.availableToAllDepartments
+                  ? "All departments"
+                  : runPickerSop.category}
+              </span>
             </div>
             <footer>
               <button type="button" onClick={() => setRunPickerId("")}>

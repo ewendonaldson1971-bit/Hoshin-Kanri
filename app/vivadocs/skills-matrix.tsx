@@ -31,6 +31,7 @@ type MatrixSop = {
   title: string;
   category: string;
   status: string;
+  availableToAllDepartments: boolean;
 };
 type Person = {
   id: string;
@@ -89,7 +90,9 @@ export function SkillsMatrix({
   const departmentSops = useMemo(
     () =>
       sops.filter(
-        (sop) => sop.category === department && sop.status === "Published",
+        (sop) =>
+          (sop.category === department || sop.availableToAllDepartments) &&
+          sop.status === "Published",
       ),
     [department, sops],
   );

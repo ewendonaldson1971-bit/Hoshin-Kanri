@@ -162,12 +162,13 @@ test("includes the interactive VivaDocs controlled-document workspace", async ()
 });
 
 test("VivaDocs skills matrix is department-scoped, editable and updated by SOP completion", async () => {
-  const [page, skills, route, store, migration, css] = await Promise.all([
+  const [page, skills, route, store, migration, globalSopMigration, css] = await Promise.all([
     readFile(new URL("../app/vivadocs/page.tsx", import.meta.url), "utf8"),
     readFile(new URL("../app/vivadocs/skills-matrix.tsx", import.meta.url), "utf8"),
     readFile(new URL("../app/api/vivadocs/skills/route.ts", import.meta.url), "utf8"),
     readFile(new URL("../lib/vivadocs-skills-store.ts", import.meta.url), "utf8"),
     readFile(new URL("../netlify/database/migrations/20260817020000_create_vivadocs_skills/migration.sql", import.meta.url), "utf8"),
+    readFile(new URL("../netlify/database/migrations/20260817043000_make_new_sop_training_global/migration.sql", import.meta.url), "utf8"),
     readFile(new URL("../app/globals.css", import.meta.url), "utf8"),
   ]);
 
@@ -175,7 +176,7 @@ test("VivaDocs skills matrix is department-scoped, editable and updated by SOP c
     assert.match(skills, new RegExp(`"${department}"`));
   }
   assert.match(skills, /aria-label="Select department"/);
-  assert.match(skills, /sop\.category === department && sop\.status === "Published"/);
+  assert.match(skills, /sop\.category === department \|\| sop\.availableToAllDepartments/);
   assert.match(skills, /person\.department === department/);
   assert.match(skills, /Add person/);
   assert.match(skills, /Transfer person/);
@@ -192,6 +193,7 @@ test("VivaDocs skills matrix is department-scoped, editable and updated by SOP c
   assert.match(page, /aria-label="Filter by department"/);
   assert.match(page, /All departments/);
   assert.match(page, /sop\.category === department/);
+  assert.match(page, /sop\.availableToAllDepartments/);
   assert.match(page, /Select your name &amp; run/);
   assert.match(page, /async function openRunPicker/);
   assert.match(page, /person\.department === sop\.category/);
@@ -202,6 +204,9 @@ test("VivaDocs skills matrix is department-scoped, editable and updated by SOP c
   assert.match(migration, /CREATE TABLE IF NOT EXISTS vivadocs_people/);
   assert.match(migration, /CREATE TABLE IF NOT EXISTS vivadocs_training_records/);
   assert.match(migration, /UNIQUE \(person_id, sop_id\)/);
+  assert.match(globalSopMigration, /available_to_all_departments BOOLEAN NOT NULL DEFAULT FALSE/);
+  assert.match(globalSopMigration, /reference = 'OFF-000001'/);
+  assert.match(globalSopMigration, /Office - How to create a new SOP/);
   assert.match(css, /\.skills-toolbar/);
   assert.match(css, /\.skills-table-scroll/);
   assert.match(css, /\.skills-modal/);
