@@ -69,168 +69,26 @@ type StoredSopDetail = StoredSopSummary & {
 };
 
 const STORAGE_KEY = "vivadocs-demo-state-v1";
+const REMOVED_DEMO_REFERENCES = new Set([
+  "OPS-014",
+  "WHS-008",
+  "QLT-021",
+  "CUS-005",
+]);
 
-const seedSops: Sop[] = [
-  {
-    id: "line-clearance",
-    reference: "OPS-014",
-    title: "Production line clearance",
-    description:
-      "Verify the line is safe, clean and ready before the next production run.",
-    category: "Operations",
-    location: "Sydney Plant",
-    owner: "Maya Chen",
-    revision: "3.0",
-    status: "Published",
-    nextReview: "18 Sep 2026",
-    steps: [
-      {
-        title: "Stop and isolate",
-        instruction:
-          "Stop the line and apply the approved isolation procedure.",
-        kind: "Confirm",
-        warning: "Do not enter the guarded area until isolation is confirmed.",
-      },
-      {
-        title: "Remove previous materials",
-        instruction:
-          "Remove labels, components, paperwork and waste from the previous job.",
-        kind: "Checklist",
-      },
-      {
-        title: "Inspect the work area",
-        instruction:
-          "Check conveyors, benches and guards for product residue or damage.",
-        kind: "Pass / fail",
-      },
-      {
-        title: "Release the line",
-        instruction:
-          "Record the job number and confirm the line is ready for production.",
-        kind: "Confirm",
-      },
-    ],
-  },
-  {
-    id: "forklift-check",
-    reference: "WHS-008",
-    title: "Forklift pre-start inspection",
-    description:
-      "Complete the mandatory visual and functional checks before operating a forklift.",
-    category: "Safety",
-    location: "National",
-    owner: "Noah Singh",
-    revision: "2.1",
-    status: "In review",
-    nextReview: "02 Oct 2026",
-    steps: [
-      {
-        title: "Visual walk-around",
-        instruction: "Check tyres, forks, mast, chains and fluid levels.",
-        kind: "Checklist",
-      },
-      {
-        title: "Safety devices",
-        instruction: "Test horn, lights, reversing alarm and seat belt.",
-        kind: "Pass / fail",
-      },
-      {
-        title: "Record condition",
-        instruction: "Confirm the forklift is fit for use or tag it out.",
-        kind: "Confirm",
-      },
-    ],
-  },
-  {
-    id: "sample-release",
-    reference: "QLT-021",
-    title: "First-off sample release",
-    description:
-      "Inspect and authorise the first production sample against the control plan.",
-    category: "Quality",
-    location: "Melbourne Plant",
-    owner: "Leo Ward",
-    revision: "1.4",
-    status: "Approved",
-    nextReview: "11 Nov 2026",
-    steps: [
-      {
-        title: "Collect the sample",
-        instruction:
-          "Take the first complete unit after stable running conditions are reached.",
-        kind: "Info",
-      },
-      {
-        title: "Measure critical features",
-        instruction:
-          "Record all critical dimensions listed in the control plan.",
-        kind: "Checklist",
-      },
-      {
-        title: "Release or contain",
-        instruction:
-          "Approve the sample or stop and contain affected production.",
-        kind: "Pass / fail",
-      },
-    ],
-  },
-  {
-    id: "customer-return",
-    reference: "CUS-005",
-    title: "Customer return intake",
-    description:
-      "Log, quarantine and triage returned product while preserving traceability.",
-    category: "Customer",
-    location: "Sydney Plant",
-    owner: "Ava Brooks",
-    revision: "1.0",
-    status: "Draft",
-    nextReview: "Not scheduled",
-    steps: [
-      {
-        title: "Verify shipment",
-        instruction: "Match the return authority to the received product.",
-        kind: "Confirm",
-      },
-      {
-        title: "Quarantine",
-        instruction: "Move the return to the identified quarantine location.",
-        kind: "Checklist",
-      },
-    ],
-  },
-];
+const seedSops: Sop[] = [];
 
-const seedAudit: AuditEvent[] = [
-  {
-    id: "a1",
-    action: "SOP published",
-    detail: "OPS-014 revision 3.0",
-    time: "Today, 09:42",
-    actor: "Maya Chen",
-  },
-  {
-    id: "a2",
-    action: "Approval requested",
-    detail: "WHS-008 revision 2.1",
-    time: "Yesterday, 16:18",
-    actor: "Noah Singh",
-  },
-  {
-    id: "a3",
-    action: "Procedure completed",
-    detail: "OPS-014 · Run #1048",
-    time: "Yesterday, 14:06",
-    actor: "Jordan Lee",
-  },
-  {
-    id: "a4",
-    action: "Revision approved",
-    detail: "QLT-021 revision 1.4",
-    time: "11 Aug, 11:24",
-    actor: "Leo Ward",
-  },
-];
+const seedAudit: AuditEvent[] = [];
+
+const activeSeedSops = seedSops.filter(
+  (sop) => !REMOVED_DEMO_REFERENCES.has(sop.reference),
+);
+const activeSeedAudit = seedAudit.filter(
+  (event) =>
+    !Array.from(REMOVED_DEMO_REFERENCES).some((reference) =>
+      event.detail.includes(reference),
+    ),
+);
 
 const skills = [
   {
@@ -272,13 +130,13 @@ function nowLabel() {
 
 export default function VivaDocsPage() {
   const [view, setView] = useState<View>("Dashboard");
-  const [sops, setSops] = useState<Sop[]>(seedSops);
-  const [audit, setAudit] = useState<AuditEvent[]>(seedAudit);
+  const [sops, setSops] = useState<Sop[]>(activeSeedSops);
+  const [audit, setAudit] = useState<AuditEvent[]>(activeSeedAudit);
   const [query, setQuery] = useState("");
   const [status, setStatus] = useState("All statuses");
-  const [selectedId, setSelectedId] = useState(seedSops[0].id);
+  const [selectedId, setSelectedId] = useState(activeSeedSops[0]?.id ?? "");
   const [createOpen, setCreateOpen] = useState(false);
-  const [runId, setRunId] = useState(seedSops[0].id);
+  const [runId, setRunId] = useState(activeSeedSops[0]?.id ?? "");
   const [runStep, setRunStep] = useState(0);
   const [responses, setResponses] = useState<Record<number, string>>({});
   const [completionMessage, setCompletionMessage] = useState("");
@@ -286,25 +144,28 @@ export default function VivaDocsPage() {
 
   useEffect(() => {
     const saved = window.localStorage.getItem(STORAGE_KEY);
-    if (!saved) return;
-    try {
-      const parsed = JSON.parse(saved) as {
-        sops?: Sop[];
-        audit?: AuditEvent[];
-      };
-      // Restore the device-local demonstration workspace after hydration.
-      // eslint-disable-next-line react-hooks/set-state-in-effect
-      if (parsed.sops?.length) setSops(parsed.sops);
-      if (parsed.audit?.length) setAudit(parsed.audit);
-    } catch {
-      window.localStorage.removeItem(STORAGE_KEY);
+    if (saved) {
+      try {
+        const parsed = JSON.parse(saved) as { audit?: AuditEvent[] };
+        const storedAudit = (parsed.audit ?? []).filter(
+          (event) =>
+            !Array.from(REMOVED_DEMO_REFERENCES).some((reference) =>
+              event.detail.includes(reference),
+            ),
+        );
+        // Restore device-local activity while database SOPs remain the source of truth.
+        // eslint-disable-next-line react-hooks/set-state-in-effect
+        if (storedAudit.length) setAudit(storedAudit);
+      } catch {
+        window.localStorage.removeItem(STORAGE_KEY);
+      }
     }
     void syncStoredSops();
   }, []);
 
   useEffect(() => {
-    window.localStorage.setItem(STORAGE_KEY, JSON.stringify({ sops, audit }));
-  }, [sops, audit]);
+    window.localStorage.setItem(STORAGE_KEY, JSON.stringify({ audit }));
+  }, [audit]);
 
   useEffect(() => {
     if (!toast) return;
@@ -379,16 +240,23 @@ export default function VivaDocsPage() {
             imageCaption: step.imageCaption || undefined,
           })),
         }));
-      setSops((current) => {
-        const storedIds = new Set(stored.map((item) => item.id));
-        return [
-          ...stored,
-          ...current.filter((item) => !storedIds.has(item.id)),
-        ];
-      });
-      if (stored.length) setSelectedId((current) => current || stored[0].id);
+      setSops(stored);
+      setSelectedId((current) =>
+        stored.some((item) => item.id === current)
+          ? current
+          : stored[0]?.id ?? "",
+      );
+      const firstPublished = stored.find((item) => item.status === "Published");
+      setRunId((current) =>
+        stored.some(
+          (item) => item.id === current && item.status === "Published",
+        )
+          ? current
+          : firstPublished?.id ?? "",
+      );
+      setRunStep(0);
     } catch {
-      // Keep the local sample library available if hosted storage is temporarily unavailable.
+      // Keep the last loaded database state if hosted storage is temporarily unavailable.
     }
   }
 
@@ -432,6 +300,7 @@ export default function VivaDocsPage() {
   }
 
   function completeRun() {
+    if (!running) return;
     const complete = running.steps.every((_, index) => responses[index]);
     if (!complete) {
       setCompletionMessage("Complete each step before submitting this run.");
@@ -948,7 +817,8 @@ export default function VivaDocsPage() {
                 ))}
               </select>
             </div>
-            <article className="operator-player">
+            {running ? (
+              <article className="operator-player">
               <div className="operator-progress">
                 <span>
                   Step {runStep + 1} of {running.steps.length}
@@ -1058,7 +928,13 @@ export default function VivaDocsPage() {
                   {completionMessage}
                 </div>
               )}
-            </article>
+              </article>
+            ) : (
+              <div className="vivadocs-empty tall">
+                <strong>No published SOPs available</strong>
+                <span>Create and publish an SOP before starting operator mode.</span>
+              </div>
+            )}
           </section>
         )}
 

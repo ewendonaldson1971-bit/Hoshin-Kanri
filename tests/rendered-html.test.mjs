@@ -127,7 +127,12 @@ test("includes the interactive VivaDocs controlled-document workspace", async ()
   assert.match(page, /async function syncStoredSops/);
   assert.match(page, /fetch\("\/api\/vivadocs\/sops"/);
   assert.match(page, /onSaved=\{syncStoredSops\}/);
-  assert.match(page, /return \[\s*\.\.\.stored,\s*\.\.\.current\.filter/);
+  assert.match(page, /setSops\(stored\)/);
+  assert.match(page, /const REMOVED_DEMO_REFERENCES = new Set/);
+  for (const reference of ["OPS-014", "WHS-008", "QLT-021", "CUS-005"]) {
+    assert.match(page, new RegExp(`REMOVED_DEMO_REFERENCES[\\s\\S]*${reference}`));
+  }
+  assert.doesNotMatch(page, /JSON\.stringify\(\{ sops, audit \}\)/);
   assert.match(page, /imageUrl: step\.existingImageUrl/);
   assert.match(page, /operator-visual.*has-image/);
   assert.match(page, /Visual instruction for Step/);
