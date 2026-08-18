@@ -637,7 +637,7 @@ export default function TrainingPage() {
               />
             ) : isConnected ? (
               <iframe
-                key={`${streamHost}-${activeUid}`}
+                key={`${streamHost}-${activeUid}-${library.refreshedAt ?? "initial"}`}
                 ref={playerRef}
                 src={`https://${streamHost}/${activeUid}/iframe?primaryColor=%23478FE1&letterboxColor=%2353565A&preload=metadata`}
                 title={activeCourse.title}

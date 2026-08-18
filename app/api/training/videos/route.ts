@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 
 type CloudflareVideo = {
   uid?: string;
+  allowedOrigins?: string[];
   created?: string;
   duration?: number;
   meta?: Record<string, unknown>;
@@ -49,6 +50,61 @@ function textMeta(meta: Record<string, unknown> | undefined, key: string) {
   return typeof value === "string" ? value.trim() : "";
 }
 
+function configuredOrigins() {
+  const values = process.env.CLOUDFLARE_STREAM_ALLOWED_ORIGINS
+    ?.split(",")
+    .map((origin) => origin.trim().replace(/^https?:\/\//i, "").replace(/\/.*$/, ""))
+    .filter(Boolean);
+  return Array.from(new Set([
+    "vivadspark.netlify.app",
+    ...(values?.length
+      ? values
+      : [
+          "keen-starlight-a13c9a.netlify.app",
+          "hoshin-kanri-workspace.vivad-gpt-0611.chatgpt.site",
+        ]),
+  ]));
+}
+
+async function repairPlaybackOrigins(
+  videos: CloudflareVideo[],
+  accountId: string,
+  apiToken: string,
+) {
+  const requiredOrigins = configuredOrigins();
+  const videosToRepair = videos.filter((video) =>
+    video.uid && requiredOrigins.some((origin) => !video.allowedOrigins?.includes(origin))
+  );
+
+  await Promise.all(videosToRepair.map(async (video) => {
+    const allowedOrigins = Array.from(new Set([
+      ...(video.allowedOrigins ?? []),
+      ...requiredOrigins,
+    ]));
+    const response = await fetch(
+      `https://api.cloudflare.com/client/v4/accounts/${encodeURIComponent(accountId)}/stream/${encodeURIComponent(video.uid as string)}`,
+      {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${apiToken}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ uid: video.uid, allowedOrigins }),
+      },
+    );
+    const payload = (await response.json()) as CloudflareResponse;
+    if (!response.ok || !payload.success) {
+      throw new Error(
+        payload.errors?.[0]?.message ||
+          `Cloudflare could not enable playback for ${video.uid}.`,
+      );
+    }
+    video.allowedOrigins = allowedOrigins;
+  }));
+
+  return videosToRepair.length;
+}
+
 export async function GET() {
   const env = getEnvironment();
   const missing = [
@@ -81,7 +137,14 @@ export async function GET() {
       throw new Error(message);
     }
 
-    const videos = (payload.result ?? [])
+    const sourceVideos = payload.result ?? [];
+    const repairedPlaybackOrigins = await repairPlaybackOrigins(
+      sourceVideos,
+      env.accountId,
+      env.apiToken,
+    );
+
+    const videos = sourceVideos
       .filter((video) => video.uid)
       .map((video) => {
         const fallbackName = `Training video ${video.uid?.slice(0, 6)}`;
@@ -125,6 +188,7 @@ export async function GET() {
       connected: true,
       streamHost: normaliseStreamHost(env.customerSubdomain) || derivedStreamHost || "",
       videos,
+      repairedPlaybackOrigins,
       refreshedAt: new Date().toISOString(),
     });
   } catch (error) {

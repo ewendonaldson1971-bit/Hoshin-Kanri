@@ -203,13 +203,15 @@ function configuredOrigins() {
     ?.split(",")
     .map((origin) => origin.trim().replace(/^https?:\/\//i, "").replace(/\/.*$/, ""))
     .filter(Boolean);
-  return values?.length
-    ? values
-    : [
-        "vivadspark.netlify.app",
-        "keen-starlight-a13c9a.netlify.app",
-        "hoshin-kanri-workspace.vivad-gpt-0611.chatgpt.site",
-      ];
+  return Array.from(new Set([
+    "vivadspark.netlify.app",
+    ...(values?.length
+      ? values
+      : [
+          "keen-starlight-a13c9a.netlify.app",
+          "hoshin-kanri-workspace.vivad-gpt-0611.chatgpt.site",
+        ]),
+  ]));
 }
 
 function decodeHeader(value: string | null) {

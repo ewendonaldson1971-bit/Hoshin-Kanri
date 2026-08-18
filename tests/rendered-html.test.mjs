@@ -82,10 +82,15 @@ test("includes the Cloudflare Stream training academy", async () => {
   assert.match(page, /\/api\/training\/videos/);
   assert.match(route, /api\.cloudflare\.com\/client\/v4\/accounts/);
   assert.match(route, /Authorization: `Bearer \$\{env\.apiToken\}`/);
+  assert.match(route, /repairPlaybackOrigins/);
+  assert.match(route, /allowedOrigins/);
+  assert.match(route, /vivadspark\.netlify\.app/);
+  assert.match(page, /library\.refreshedAt \?\? "initial"/);
   assert.doesNotMatch(route, /NextResponse\.json\([^)]*apiToken/);
   assert.match(envExample, /CLOUDFLARE_STREAM_API_TOKEN=/);
   assert.match(envExample, /CLOUDFLARE_STREAM_CUSTOMER_SUBDOMAIN=/);
   assert.match(envExample, /NEXT_PUBLIC_CLOUDFLARE_STREAM_CUSTOMER_CODE=/);
+  assert.match(envExample, /CLOUDFLARE_STREAM_ALLOWED_ORIGINS=vivadspark\.netlify\.app/);
   assert.match(css, /\.training-player iframe/);
   assert.match(css, /\.stream-modal/);
 });
@@ -113,6 +118,7 @@ test("provides public access to the Stream and YouTube video uploader", async ()
   assert.match(uploadRoute, /"Tus-Resumable": "1\.0\.0"/);
   assert.match(uploadRoute, /"Upload-Length": String\(uploadLength\)/);
   assert.match(uploadRoute, /MAX_VIDEO_UPLOAD_BYTES = 1024 \* 1024 \* 1024/);
+  assert.match(uploadRoute, /"vivadspark\.netlify\.app"/);
   assert.doesNotMatch(uploadRoute, /getHoshinSessionUsername/);
   assert.doesNotMatch(page, /Upload access key/);
   assert.doesNotMatch(uploadRoute, /CLOUDFLARE_STREAM_UPLOAD_SECRET/);
