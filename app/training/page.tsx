@@ -53,6 +53,19 @@ type StreamConfig = {
   videoIds: Record<string, string>;
 };
 
+type SkillsPerson = {
+  id: string;
+  name: string;
+  department: string;
+  role: string;
+};
+
+type SkillsDirectoryResponse = {
+  departments?: string[];
+  people?: SkillsPerson[];
+  error?: string;
+};
+
 type StreamPlayer = {
   addEventListener: (event: string, callback: () => void) => void;
 };
@@ -134,10 +147,42 @@ const courses: Course[] = [
 
 const configKey = "vivad-stream-training-config";
 const progressKey = "vivad-stream-training-progress";
+const selectedDepartmentKey = "vivad-training-selected-department";
+const selectedPersonKey = "vivad-training-selected-person";
 const youtubeKey = "vivad-youtube-training-links";
 const BASIC_UPLOAD_MAX_BYTES = 200 * 1024 * 1024;
 const MAX_VIDEO_UPLOAD_BYTES = 1024 * 1024 * 1024;
 const TUS_CHUNK_BYTES = 50 * 1024 * 1024;
+const DEFAULT_DEPARTMENTS = ["CST", "Prepress", "Printers", "Cutters", "Fab1", "Framing", "Sew", "Light Box", "Office", "Despatch"];
+
+function personProgressKey(personId: string) {
+  return `${progressKey}:${personId}`;
+}
+
+function parseProgress(value: string | null) {
+  if (!value) return [];
+  try {
+    const parsed = JSON.parse(value) as unknown;
+    return Array.isArray(parsed)
+      ? parsed.filter((item): item is string => typeof item === "string")
+      : [];
+  } catch {
+    return [];
+  }
+}
+
+function loadPersonProgress(personId: string) {
+  const scopedKey = personProgressKey(personId);
+  const scopedValue = window.localStorage.getItem(scopedKey);
+  if (scopedValue !== null) return parseProgress(scopedValue);
+
+  const legacyProgress = parseProgress(window.localStorage.getItem(progressKey));
+  if (legacyProgress.length) {
+    window.localStorage.setItem(scopedKey, JSON.stringify(legacyProgress));
+    window.localStorage.removeItem(progressKey);
+  }
+  return legacyProgress;
+}
 
 function youtubeVideoId(value: string) {
   try {
@@ -275,6 +320,12 @@ export default function TrainingPage() {
   const [query, setQuery] = useState("");
   const [category, setCategory] = useState("All topics");
   const [completed, setCompleted] = useState<string[]>([]);
+  const [departments, setDepartments] = useState<string[]>(DEFAULT_DEPARTMENTS);
+  const [people, setPeople] = useState<SkillsPerson[]>([]);
+  const [selectedDepartment, setSelectedDepartment] = useState("Despatch");
+  const [selectedPersonId, setSelectedPersonId] = useState("");
+  const [peopleLoading, setPeopleLoading] = useState(true);
+  const [peopleError, setPeopleError] = useState("");
   const [configOpen, setConfigOpen] = useState(false);
   const [uploadOpen, setUploadOpen] = useState(false);
   const [uploadProgress, setUploadProgress] = useState(0);
@@ -294,6 +345,7 @@ export default function TrainingPage() {
   });
   const playerRef = useRef<HTMLIFrameElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const selectedPersonIdRef = useRef("");
 
   const refreshLibrary = useCallback(async () => {
     setLibraryLoading(true);
@@ -312,9 +364,37 @@ export default function TrainingPage() {
     }
   }, []);
 
+  const refreshPeople = useCallback(async () => {
+    setPeopleLoading(true);
+    setPeopleError("");
+    try {
+      const response = await fetch("/api/vivadocs/skills", { cache: "no-store" });
+      const payload = (await response.json()) as SkillsDirectoryResponse;
+      if (!response.ok) throw new Error(payload.error || "The people directory could not be loaded.");
+
+      const nextDepartments = payload.departments?.length ? payload.departments : DEFAULT_DEPARTMENTS;
+      const nextPeople = payload.people ?? [];
+      const savedPersonId = window.localStorage.getItem(selectedPersonKey) ?? "";
+      const savedPerson = nextPeople.find((person) => person.id === savedPersonId);
+      const savedDepartment = window.localStorage.getItem(selectedDepartmentKey) ?? "";
+      const nextDepartment = savedPerson?.department || (nextDepartments.includes(savedDepartment) ? savedDepartment : "Despatch");
+
+      setDepartments(nextDepartments);
+      setPeople(nextPeople);
+      setSelectedDepartment(nextDepartment);
+      setSelectedPersonId(savedPerson?.id ?? "");
+      selectedPersonIdRef.current = savedPerson?.id ?? "";
+      setCompleted(savedPerson ? loadPersonProgress(savedPerson.id) : []);
+    } catch (error) {
+      setPeopleError(error instanceof Error ? error.message : "The people directory could not be loaded.");
+      setCompleted([]);
+    } finally {
+      setPeopleLoading(false);
+    }
+  }, []);
+
   useEffect(() => {
     const savedConfig = window.localStorage.getItem(configKey);
-    const savedProgress = window.localStorage.getItem(progressKey);
     const savedYoutube = window.localStorage.getItem(youtubeKey);
     if (savedConfig) {
       try {
@@ -323,13 +403,6 @@ export default function TrainingPage() {
         setConfig(JSON.parse(savedConfig) as StreamConfig);
       } catch {
         window.localStorage.removeItem(configKey);
-      }
-    }
-    if (savedProgress) {
-      try {
-        setCompleted(JSON.parse(savedProgress) as string[]);
-      } catch {
-        window.localStorage.removeItem(progressKey);
       }
     }
     if (savedYoutube) {
@@ -357,6 +430,12 @@ export default function TrainingPage() {
     // eslint-disable-next-line react-hooks/set-state-in-effect
     void refreshLibrary();
   }, [refreshLibrary]);
+
+  useEffect(() => {
+    // Use the same people and departments maintained by the VivaDocs skills matrix.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    void refreshPeople();
+  }, [refreshPeople]);
 
   const libraryCourses = useMemo<Course[]>(() => {
     if (!library.connected || !library.videos.length) return [...courses, ...youtubeCourses];
@@ -410,13 +489,20 @@ export default function TrainingPage() {
   const hasDeliveryError = Boolean(activeCourse.deliveryError);
   const isConnected = Boolean(!isYoutube && streamHost && activeUid?.trim() && isReady && !isProtected);
   const completionRate = libraryCourses.length ? Math.round((completed.filter((id) => libraryCourses.some((course) => course.id === id)).length / libraryCourses.length) * 100) : 0;
+  const selectedPerson = people.find((person) => person.id === selectedPersonId);
+  const departmentPeople = people.filter((person) => person.department === selectedDepartment);
+  const completedCount = completed.filter((id) => libraryCourses.some((course) => course.id === id)).length;
 
   function markComplete(courseId: string) {
+    if (!selectedPersonId) {
+      setPeopleError("Select the person watching before recording progress.");
+      return;
+    }
     setCompleted((current) => {
       const next = current.includes(courseId)
         ? current.filter((id) => id !== courseId)
         : [...current, courseId];
-      window.localStorage.setItem(progressKey, JSON.stringify(next));
+      window.localStorage.setItem(personProgressKey(selectedPersonId), JSON.stringify(next));
       return next;
     });
   }
@@ -425,13 +511,72 @@ export default function TrainingPage() {
     if (!playerRef.current || !window.Stream) return;
     const player = window.Stream(playerRef.current);
     player.addEventListener("ended", () => {
+      const personId = selectedPersonIdRef.current;
+      if (!personId) return;
       setCompleted((current) => {
         if (current.includes(activeCourse.id)) return current;
         const next = [...current, activeCourse.id];
-        window.localStorage.setItem(progressKey, JSON.stringify(next));
+        window.localStorage.setItem(personProgressKey(personId), JSON.stringify(next));
         return next;
       });
     });
+  }
+
+  function chooseDepartment(value: string) {
+    setSelectedDepartment(value);
+    setSelectedPersonId("");
+    selectedPersonIdRef.current = "";
+    setCompleted([]);
+    setPeopleError("");
+    window.localStorage.setItem(selectedDepartmentKey, value);
+    window.localStorage.removeItem(selectedPersonKey);
+  }
+
+  function choosePerson(personId: string) {
+    setSelectedPersonId(personId);
+    selectedPersonIdRef.current = personId;
+    setPeopleError("");
+    if (!personId) {
+      setCompleted([]);
+      window.localStorage.removeItem(selectedPersonKey);
+      return;
+    }
+    const person = people.find((item) => item.id === personId);
+    if (person && person.department !== selectedDepartment) {
+      setSelectedDepartment(person.department);
+      window.localStorage.setItem(selectedDepartmentKey, person.department);
+    }
+    window.localStorage.setItem(selectedPersonKey, personId);
+    setCompleted(loadPersonProgress(personId));
+  }
+
+  function renderProgressCard(className = "") {
+    return (
+      <div className={`training-progress-card ${className}`.trim()}>
+        <div><span>YOUR PROGRESS</span><strong>{completionRate}%</strong></div>
+        <div className="training-progress-person">
+          <span>PERSON WATCHING</span>
+          <b>{selectedPerson?.name ?? "Select a person"}</b>
+          {selectedPerson && <small>{selectedPerson.department} · {selectedPerson.role}</small>}
+        </div>
+        <label>
+          <span>DEPARTMENT</span>
+          <select aria-label="Select training department" value={selectedDepartment} onChange={(event) => chooseDepartment(event.target.value)} disabled={peopleLoading}>
+            {departments.map((department) => <option key={department}>{department}</option>)}
+          </select>
+        </label>
+        <label>
+          <span>PERSON</span>
+          <select aria-label="Select person watching training" value={selectedPersonId} onChange={(event) => choosePerson(event.target.value)} disabled={peopleLoading || !departmentPeople.length}>
+            <option value="">{peopleLoading ? "Loading people…" : departmentPeople.length ? "Select person" : "No people in department"}</option>
+            {departmentPeople.map((person) => <option key={person.id} value={person.id}>{person.name}</option>)}
+          </select>
+        </label>
+        {peopleError && <p className="training-progress-error" role="alert">{peopleError}</p>}
+        <div className="training-progress-track"><i style={{ width: `${completionRate}%` }} /></div>
+        <small>{completedCount} of {libraryCourses.length} modules complete</small>
+      </div>
+    );
   }
 
   function saveConfiguration(event: FormEvent<HTMLFormElement>) {
@@ -633,9 +778,16 @@ export default function TrainingPage() {
 
       setCompleted((current) => {
         const next = current.filter((id) => id !== course.id);
-        window.localStorage.setItem(progressKey, JSON.stringify(next));
+        if (selectedPersonId) {
+          window.localStorage.setItem(personProgressKey(selectedPersonId), JSON.stringify(next));
+        }
         return next;
       });
+      for (const person of people) {
+        const key = personProgressKey(person.id);
+        const next = parseProgress(window.localStorage.getItem(key)).filter((id) => id !== course.id);
+        window.localStorage.setItem(key, JSON.stringify(next));
+      }
       if (activeId === course.id) {
         setActiveId(libraryCourses.find((item) => item.id !== course.id)?.id ?? courses[0].id);
       }
@@ -663,11 +815,7 @@ export default function TrainingPage() {
           <Link className="active" href={navigationItem("training").href}><i>{navigationItem("training").icon}</i> {navigationItem("training").label}</Link>
           <Link href={navigationItem("vivadocs").href}><i>{navigationItem("vivadocs").icon}</i> {navigationItem("vivadocs").label}</Link>
         </nav>
-        <div className="training-progress-card">
-          <div><span>YOUR PROGRESS</span><strong>{completionRate}%</strong></div>
-          <div className="training-progress-track"><i style={{ width: `${completionRate}%` }} /></div>
-          <small>{completed.filter((id) => libraryCourses.some((course) => course.id === id)).length} of {libraryCourses.length} modules complete</small>
-        </div>
+        {renderProgressCard()}
       </aside>
 
       <main className="training-main">
@@ -686,6 +834,8 @@ export default function TrainingPage() {
             </button>
           </div>
         </header>
+
+        {renderProgressCard("training-mobile-progress")}
 
         <section className="training-feature">
           <div className="training-player">
@@ -726,7 +876,7 @@ export default function TrainingPage() {
             <h2>{activeCourse.title}</h2>
             <p>{activeCourse.description}</p>
             <div className="training-owner"><span>{activeCourse.owner.slice(0, 2).toUpperCase()}</span><div><small>CONTENT OWNER</small><strong>{activeCourse.owner}</strong></div></div>
-            <button className={completed.includes(activeCourse.id) ? "module-complete completed" : "module-complete"} type="button" onClick={() => markComplete(activeCourse.id)}>
+            <button className={completed.includes(activeCourse.id) ? "module-complete completed" : "module-complete"} type="button" onClick={() => markComplete(activeCourse.id)} disabled={!selectedPersonId} title={!selectedPersonId ? "Select the person watching to record progress" : undefined}>
               <span>{completed.includes(activeCourse.id) ? "✓" : "○"}</span>
               {completed.includes(activeCourse.id) ? "Completed" : "Mark as complete"}
             </button>
@@ -779,7 +929,7 @@ export default function TrainingPage() {
                     <div><span>{course.category}</span><span>{course.duration}</span></div>
                     <h3>{course.title}</h3>
                     <p>{course.description}</p>
-                    <div className="training-card-actions"><button type="button" onClick={() => markComplete(course.id)}><span>{done ? "✓" : "○"}</span>{done ? "Complete" : "Mark complete"}</button></div>
+                    <div className="training-card-actions"><button type="button" onClick={() => markComplete(course.id)} disabled={!selectedPersonId} title={!selectedPersonId ? "Select the person watching to record progress" : undefined}><span>{done ? "✓" : "○"}</span>{done ? "Complete" : "Mark complete"}</button></div>
                   </div>
                 </article>
               );

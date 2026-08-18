@@ -98,6 +98,14 @@ test("includes the Cloudflare Stream training academy", async () => {
   assert.match(page, /method: "DELETE"/);
   assert.match(page, /window\.localStorage\.setItem\(youtubeKey/);
   assert.match(page, /training-delete-notice/);
+  assert.match(page, /fetch\("\/api\/vivadocs\/skills"/);
+  assert.match(page, /aria-label="Select training department"/);
+  assert.match(page, /aria-label="Select person watching training"/);
+  assert.match(page, /PERSON WATCHING/);
+  assert.match(page, /selectedPerson\?\.name/);
+  assert.match(page, /personProgressKey\(selectedPersonId\)/);
+  assert.match(page, /selectedPersonIdRef\.current/);
+  assert.match(page, /disabled=\{!selectedPersonId\}/);
   assert.match(route, /export async function DELETE\(request: Request\)/);
   assert.match(route, /getHoshinSessionUsername/);
   assert.match(route, /createDeleteCapability/);
@@ -120,6 +128,8 @@ test("includes the Cloudflare Stream training academy", async () => {
   assert.match(css, /\.stream-modal/);
   assert.match(css, /\.training-delete-video/);
   assert.match(css, /\.training-delete-notice/);
+  assert.match(css, /\.training-progress-person/);
+  assert.match(css, /\.training-mobile-progress/);
 });
 
 test("provides public access to the Stream and YouTube video uploader", async () => {
