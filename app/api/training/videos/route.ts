@@ -23,6 +23,7 @@ type CloudflareResponse = {
 
 type DeleteVideoRequest = {
   uid?: unknown;
+  token?: unknown;
 };
 
 function getEnvironment() {
@@ -40,13 +41,37 @@ function getEnvironment() {
   };
 }
 
-function canDeleteVideo(username: string) {
-  if (!username) return false;
-  const allowedUsers = (process.env.TRAINING_VIDEO_DELETE_USERS ?? "")
-    .split(",")
-    .map((value) => value.trim().toLowerCase())
-    .filter(Boolean);
-  return allowedUsers.includes("*") || allowedUsers.includes(username.toLowerCase());
+async function createDeleteCapability(username: string, uid: string, secret: string) {
+  const expires = Math.floor(Date.now() / 1000) + 60 * 60;
+  return `${expires}.${await signDeleteCapability(`${username}.${uid}.${expires}`, secret)}`;
+}
+
+async function verifyDeleteCapability(username: string, uid: string, token: string, secret: string) {
+  const [expiresRaw, signature] = token.split(".");
+  const expires = Number.parseInt(expiresRaw ?? "", 10);
+  if (!Number.isInteger(expires) || expires < Math.floor(Date.now() / 1000) || !signature) return false;
+  const expected = await signDeleteCapability(`${username}.${uid}.${expiresRaw}`, secret);
+  if (signature.length !== expected.length) return false;
+  let difference = 0;
+  for (let index = 0; index < signature.length; index += 1) {
+    difference |= signature.charCodeAt(index) ^ expected.charCodeAt(index);
+  }
+  return difference === 0;
+}
+
+async function signDeleteCapability(value: string, secret: string) {
+  const encoder = new TextEncoder();
+  const key = await crypto.subtle.importKey(
+    "raw",
+    encoder.encode(secret),
+    { name: "HMAC", hash: "SHA-256" },
+    false,
+    ["sign"],
+  );
+  const signature = new Uint8Array(
+    await crypto.subtle.sign("HMAC", key, encoder.encode(value)),
+  );
+  return Array.from(signature, (byte) => byte.toString(16).padStart(2, "0")).join("");
 }
 
 function normaliseStreamHost(value: string) {
@@ -191,9 +216,10 @@ export async function GET(request: Request) {
       env.apiToken,
     );
 
-    const videos = sourceVideos
+    const deleteSecret = authEnv().LOTUS_AUTH_SECRET?.trim() ?? "";
+    const videos = await Promise.all(sourceVideos
       .filter((video) => video.uid)
-      .map((video) => {
+      .map(async (video) => {
         const fallbackName = `Training video ${video.uid?.slice(0, 6)}`;
         return {
           id: video.uid,
@@ -218,9 +244,12 @@ export async function GET(request: Request) {
           progress: video.status?.pctComplete ?? null,
           requiresSignedUrls: Boolean(video.requireSignedURLs),
           created: video.created ?? null,
+          deleteToken: username && deleteSecret
+            ? await createDeleteCapability(username, video.uid as string, deleteSecret)
+            : "",
         };
-      })
-      .sort((a, b) => (b.created ?? "").localeCompare(a.created ?? ""));
+      }));
+    videos.sort((a, b) => (b.created ?? "").localeCompare(a.created ?? ""));
 
     const derivedStreamHost = videos
       .map((video) => video.thumbnail)
@@ -238,7 +267,6 @@ export async function GET(request: Request) {
       connected: true,
       streamHost: normaliseStreamHost(env.customerSubdomain) || derivedStreamHost || "",
       videos,
-      canDelete: canDeleteVideo(username),
       repairedPlaybackOrigins,
       refreshedAt: new Date().toISOString(),
     });
@@ -265,12 +293,6 @@ export async function DELETE(request: Request) {
       { status: 401 },
     );
   }
-  if (!canDeleteVideo(username)) {
-    return NextResponse.json(
-      { error: "Your account does not have permission to delete training videos." },
-      { status: 403 },
-    );
-  }
 
   let body: DeleteVideoRequest;
   try {
@@ -282,6 +304,14 @@ export async function DELETE(request: Request) {
   const uid = typeof body.uid === "string" ? body.uid.trim() : "";
   if (!/^[a-f0-9]{32}$/i.test(uid)) {
     return NextResponse.json({ error: "The video ID is invalid." }, { status: 400 });
+  }
+  const secret = authEnv().LOTUS_AUTH_SECRET?.trim() ?? "";
+  const token = typeof body.token === "string" ? body.token.trim() : "";
+  if (!secret || !await verifyDeleteCapability(username, uid, token, secret)) {
+    return NextResponse.json(
+      { error: "This delete request has expired. Refresh the training library and try again." },
+      { status: 403 },
+    );
   }
 
   const env = getEnvironment();

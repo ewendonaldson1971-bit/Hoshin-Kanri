@@ -100,9 +100,11 @@ test("includes the Cloudflare Stream training academy", async () => {
   assert.match(page, /training-delete-notice/);
   assert.match(route, /export async function DELETE\(request: Request\)/);
   assert.match(route, /getHoshinSessionUsername/);
-  assert.match(route, /TRAINING_VIDEO_DELETE_USERS/);
-  assert.match(route, /canDeleteVideo\(username\)/);
-  assert.match(page, /course\.source === "stream" && library\.canDelete/);
+  assert.match(route, /createDeleteCapability/);
+  assert.match(route, /verifyDeleteCapability/);
+  assert.match(route, /crypto\.subtle\.sign/);
+  assert.match(page, /course\.source === "stream" && course\.deleteToken/);
+  assert.match(page, /<svg viewBox="0 0 24 24"/);
   assert.match(route, /\^\[a-f0-9\]\{32\}\$/i);
   assert.match(route, /method: "DELETE"/);
   assert.match(route, /deletedBy: username/);
@@ -111,7 +113,6 @@ test("includes the Cloudflare Stream training academy", async () => {
   assert.match(envExample, /CLOUDFLARE_STREAM_CUSTOMER_SUBDOMAIN=/);
   assert.match(envExample, /NEXT_PUBLIC_CLOUDFLARE_STREAM_CUSTOMER_CODE=/);
   assert.match(envExample, /CLOUDFLARE_STREAM_ALLOWED_ORIGINS=vivadspark\.netlify\.app/);
-  assert.match(envExample, /TRAINING_VIDEO_DELETE_USERS=/);
   assert.match(css, /\.training-player iframe/);
   assert.match(css, /\.stream-modal/);
   assert.match(css, /\.training-delete-video/);

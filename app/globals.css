@@ -1194,7 +1194,7 @@ select:focus, input:focus { border-color: var(--blue); box-shadow: 0 0 0 3px rgb
 .training-topic-filter button { min-height: 32px; padding: 0 13px; border: 1px solid var(--line); border-radius: 99px; background: #fff; color: #797d83; font-size: 9px; font-weight: 700; }
 .training-topic-filter button.active { border-color: var(--blue); background: var(--soft-blue); color: var(--blue-dark); }
 .training-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px; }
-.training-card { overflow: hidden; border: 1px solid rgba(167,170,173,.38); border-radius: 8px; background: #fff; transition: .18s ease; }
+.training-card { position: relative; overflow: hidden; border: 1px solid rgba(167,170,173,.38); border-radius: 8px; background: #fff; transition: .18s ease; }
 .training-card:hover, .training-card.active { border-color: #bbd5f2; box-shadow: var(--shadow); transform: translateY(-2px); }
 .training-card-visual { position: relative; width: 100%; height: 145px; overflow: hidden; border: 0; background: linear-gradient(135deg, #dceafb, #77aee9); }
 .training-card-visual::before, .training-card-visual::after { content: ""; position: absolute; border-radius: 50%; border: 28px solid rgba(255,255,255,.18); }
@@ -1215,9 +1215,11 @@ select:focus, input:focus { border-color: var(--blue); box-shadow: 0 0 0 3px rgb
 .training-card-actions { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
 .training-card-actions button { min-height: 32px; display: flex; align-items: center; gap: 6px; padding: 0; border: 0; background: transparent; color: var(--blue); font-size: 9px; font-weight: 700; cursor: pointer; }
 .training-card-actions button span { font-size: 14px; }
-.training-card-actions .training-delete-video { min-width: 58px; justify-content: center; padding: 0 10px; border: 1px solid #f0bec7; border-radius: 99px; color: #b51632; }
-.training-card-actions .training-delete-video:hover, .training-card-actions .training-delete-video:focus-visible { border-color: #df3150; background: #fff1f3; outline: 2px solid rgba(223,49,80,.2); outline-offset: 2px; }
-.training-card-actions .training-delete-video:disabled { cursor: wait; opacity: .55; }
+.training-delete-video { position: absolute; z-index: 3; top: 11px; right: 11px; width: 38px; height: 38px; display: grid; place-items: center; padding: 0; border: 1px solid rgba(181,22,50,.32); border-radius: 50%; background: rgba(255,255,255,.96); box-shadow: 0 4px 14px rgba(31,39,47,.18); color: #b51632; cursor: pointer; }
+.training-delete-video svg { width: 19px; height: 19px; fill: currentColor; }
+.training-delete-video:hover, .training-delete-video:focus-visible { border-color: #df3150; background: #fff1f3; outline: 3px solid rgba(223,49,80,.23); outline-offset: 2px; transform: translateY(-1px); }
+.training-delete-video:disabled { cursor: wait; opacity: .7; }
+.training-delete-spinner { width: 17px; height: 17px; border: 2px solid rgba(181,22,50,.22); border-top-color: #b51632; border-radius: 50%; animation: spin .7s linear infinite; }
 .training-delete-notice { margin: -8px 0 16px; padding: 10px 13px; border: 1px solid #b9df9f; border-radius: 7px; background: #f1faeb; color: #3d7424; font-size: 10px; font-weight: 700; }
 .training-delete-notice.error { border-color: #f0bec7; background: #fff1f3; color: #a7102c; }
 .training-empty { min-height: 180px; display: grid; place-items: center; align-content: center; gap: 8px; border: 1px dashed #cdd0d4; border-radius: 8px; background: #fff; color: #777b82; }

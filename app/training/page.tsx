@@ -21,11 +21,11 @@ type Course = {
   source?: "stream" | "youtube";
   youtubeId?: string;
   created?: string | null;
+  deleteToken?: string;
 };
 
 type StreamLibraryResponse = {
   connected: boolean;
-  canDelete?: boolean;
   streamHost?: string;
   refreshedAt?: string;
   error?: string;
@@ -44,6 +44,7 @@ type StreamLibraryResponse = {
     deliveryError?: boolean;
     requiresSignedUrls: boolean;
     created?: string | null;
+    deleteToken?: string;
   }>;
 };
 
@@ -375,6 +376,7 @@ export default function TrainingPage() {
       deliveryError: video.deliveryError,
       requiresSignedUrls: video.requiresSignedUrls,
       created: video.created ?? null,
+      deleteToken: video.deleteToken,
       source: "stream" as const,
     }));
     return [...streamCourses, ...youtubeCourses];
@@ -613,7 +615,7 @@ export default function TrainingPage() {
         const response = await fetch("/api/training/videos", {
           method: "DELETE",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ uid: course.videoUid }),
+          body: JSON.stringify({ uid: course.videoUid, token: course.deleteToken }),
         });
         const payload = (await response.json().catch(() => ({}))) as { error?: string };
         if (!response.ok) {
@@ -750,24 +752,29 @@ export default function TrainingPage() {
                     <span className="training-play">▶</span>
                     <span className={connected ? "stream-state connected" : "stream-state"}>{course.youtubeId ? "YOUTUBE LINK" : course.requiresSignedUrls ? "SIGNED / LOCKED" : course.ready === false ? "PROCESSING" : connected ? "STREAM READY" : "ADD VIDEO"}</span>
                   </button>
+                  {(course.source === "youtube" || (course.source === "stream" && course.deleteToken)) && (
+                    <button
+                      className="training-delete-video"
+                      type="button"
+                      disabled={deletingId === course.id}
+                      onClick={() => void deleteCourse(course)}
+                      aria-label={`Delete ${course.title}`}
+                      title={`Delete ${course.title}`}
+                    >
+                      {deletingId === course.id ? (
+                        <span className="training-delete-spinner" aria-hidden="true" />
+                      ) : (
+                        <svg viewBox="0 0 24 24" aria-hidden="true">
+                          <path d="M9 3h6l1 2h4v2H4V5h4l1-2Zm-3 6h12l-1 11H7L6 9Zm3 2v6h2v-6H9Zm4 0v6h2v-6h-2Z" />
+                        </svg>
+                      )}
+                    </button>
+                  )}
                   <div className="training-card-body">
                     <div><span>{course.category}</span><span>{course.duration}</span></div>
                     <h3>{course.title}</h3>
                     <p>{course.description}</p>
-                    <div className="training-card-actions">
-                      <button type="button" onClick={() => markComplete(course.id)}><span>{done ? "✓" : "○"}</span>{done ? "Complete" : "Mark complete"}</button>
-                      {(course.source === "youtube" || (course.source === "stream" && library.canDelete)) && (
-                        <button
-                          className="training-delete-video"
-                          type="button"
-                          disabled={deletingId === course.id}
-                          onClick={() => void deleteCourse(course)}
-                          aria-label={`Delete ${course.title}`}
-                        >
-                          {deletingId === course.id ? "Deleting…" : "Delete"}
-                        </button>
-                      )}
-                    </div>
+                    <div className="training-card-actions"><button type="button" onClick={() => markComplete(course.id)}><span>{done ? "✓" : "○"}</span>{done ? "Complete" : "Mark complete"}</button></div>
                   </div>
                 </article>
               );
