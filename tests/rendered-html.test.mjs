@@ -84,6 +84,8 @@ test("includes the Cloudflare Stream training academy", async () => {
   assert.match(route, /Authorization: `Bearer \$\{env\.apiToken\}`/);
   assert.match(route, /repairPlaybackOrigins/);
   assert.match(route, /isPlaybackAvailable/);
+  assert.match(route, /isEncodingComplete/);
+  assert.match(route, /status\?\.state === "ready"/);
   assert.match(route, /method: "HEAD"/);
   assert.match(route, /deliveryError/);
   assert.match(route, /allowedOrigins/);

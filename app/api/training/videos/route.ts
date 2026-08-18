@@ -78,7 +78,7 @@ async function repairPlaybackOrigins(
   }));
   const videosToRepair = videos.filter((video) => video.uid && (
     requiredOrigins.some((origin) => !video.allowedOrigins?.includes(origin)) ||
-    (video.readyToStream && !video.deliveryReady)
+    (isEncodingComplete(video) && !video.deliveryReady)
   ));
 
   await Promise.all(videosToRepair.map(async (video) => {
@@ -116,7 +116,7 @@ async function repairPlaybackOrigins(
 }
 
 async function isPlaybackAvailable(video: CloudflareVideo) {
-  if (!video.readyToStream || !video.thumbnail) return false;
+  if (!isEncodingComplete(video) || !video.thumbnail) return false;
   try {
     const response = await fetch(video.thumbnail, {
       method: "HEAD",
@@ -127,6 +127,11 @@ async function isPlaybackAvailable(video: CloudflareVideo) {
   } catch {
     return false;
   }
+}
+
+function isEncodingComplete(video: CloudflareVideo) {
+  return video.status?.state === "ready" &&
+    Number(video.status.pctComplete ?? 0) >= 100;
 }
 
 export async function GET() {
@@ -187,9 +192,9 @@ export async function GET() {
           owner: textMeta(video.meta, "owner") || "Vivad",
           durationSeconds: Math.max(0, Math.round(video.duration ?? 0)),
           thumbnail: video.thumbnail ?? "",
-          ready: Boolean(video.readyToStream && video.deliveryReady),
-          deliveryError: Boolean(video.readyToStream && !video.deliveryReady),
-          status: video.readyToStream && !video.deliveryReady
+          ready: Boolean(isEncodingComplete(video) && video.deliveryReady),
+          deliveryError: Boolean(isEncodingComplete(video) && !video.deliveryReady),
+          status: isEncodingComplete(video) && !video.deliveryReady
             ? "delivery-error"
             : video.status?.state ?? "unknown",
           progress: video.status?.pctComplete ?? null,
