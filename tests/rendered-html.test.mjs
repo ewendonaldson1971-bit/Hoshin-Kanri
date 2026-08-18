@@ -93,13 +93,29 @@ test("includes the Cloudflare Stream training academy", async () => {
   assert.match(page, /library\.refreshedAt \?\? "initial"/);
   assert.match(page, /Cloudflare could not deliver this video/);
   assert.match(page, /Try playback again/);
+  assert.match(page, /Permanently delete/);
+  assert.match(page, /aria-label=\{`Delete \$\{course\.title\}`\}/);
+  assert.match(page, /method: "DELETE"/);
+  assert.match(page, /window\.localStorage\.setItem\(youtubeKey/);
+  assert.match(page, /training-delete-notice/);
+  assert.match(route, /export async function DELETE\(request: Request\)/);
+  assert.match(route, /getHoshinSessionUsername/);
+  assert.match(route, /TRAINING_VIDEO_DELETE_USERS/);
+  assert.match(route, /canDeleteVideo\(username\)/);
+  assert.match(page, /course\.source === "stream" && library\.canDelete/);
+  assert.match(route, /\^\[a-f0-9\]\{32\}\$/i);
+  assert.match(route, /method: "DELETE"/);
+  assert.match(route, /deletedBy: username/);
   assert.doesNotMatch(route, /NextResponse\.json\([^)]*apiToken/);
   assert.match(envExample, /CLOUDFLARE_STREAM_API_TOKEN=/);
   assert.match(envExample, /CLOUDFLARE_STREAM_CUSTOMER_SUBDOMAIN=/);
   assert.match(envExample, /NEXT_PUBLIC_CLOUDFLARE_STREAM_CUSTOMER_CODE=/);
   assert.match(envExample, /CLOUDFLARE_STREAM_ALLOWED_ORIGINS=vivadspark\.netlify\.app/);
+  assert.match(envExample, /TRAINING_VIDEO_DELETE_USERS=/);
   assert.match(css, /\.training-player iframe/);
   assert.match(css, /\.stream-modal/);
+  assert.match(css, /\.training-delete-video/);
+  assert.match(css, /\.training-delete-notice/);
 });
 
 test("provides public access to the Stream and YouTube video uploader", async () => {

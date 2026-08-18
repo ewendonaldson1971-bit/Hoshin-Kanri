@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { authEnv, getHoshinSessionUsername } from "../../../../lib/auth/hoshin-auth";
 
 type CloudflareVideo = {
   uid?: string;
@@ -20,6 +21,10 @@ type CloudflareResponse = {
   errors?: Array<{ message?: string }>;
 };
 
+type DeleteVideoRequest = {
+  uid?: unknown;
+};
+
 function getEnvironment() {
   return {
     accountId: process.env.CLOUDFLARE_ACCOUNT_ID?.trim() ?? "",
@@ -33,6 +38,15 @@ function getEnvironment() {
       process.env.NEXT_PUBLIC_CLOUDFLARE_STREAM_CUSTOMER_CODE?.trim() ??
       "",
   };
+}
+
+function canDeleteVideo(username: string) {
+  if (!username) return false;
+  const allowedUsers = (process.env.TRAINING_VIDEO_DELETE_USERS ?? "")
+    .split(",")
+    .map((value) => value.trim().toLowerCase())
+    .filter(Boolean);
+  return allowedUsers.includes("*") || allowedUsers.includes(username.toLowerCase());
 }
 
 function normaliseStreamHost(value: string) {
@@ -134,8 +148,12 @@ function isEncodingComplete(video: CloudflareVideo) {
     Number(video.status.pctComplete ?? 0) >= 100;
 }
 
-export async function GET() {
+export async function GET(request: Request) {
   const env = getEnvironment();
+  const username = await getHoshinSessionUsername(
+    request.headers.get("cookie") ?? "",
+    authEnv(),
+  );
   const missing = [
     !env.accountId && "CLOUDFLARE_ACCOUNT_ID",
     !env.apiToken && "CLOUDFLARE_STREAM_API_TOKEN",
@@ -220,6 +238,7 @@ export async function GET() {
       connected: true,
       streamHost: normaliseStreamHost(env.customerSubdomain) || derivedStreamHost || "",
       videos,
+      canDelete: canDeleteVideo(username),
       repairedPlaybackOrigins,
       refreshedAt: new Date().toISOString(),
     });
@@ -229,6 +248,82 @@ export async function GET() {
         connected: false,
         videos: [],
         error: error instanceof Error ? error.message : "Cloudflare Stream could not be reached.",
+      },
+      { status: 502 },
+    );
+  }
+}
+
+export async function DELETE(request: Request) {
+  const username = await getHoshinSessionUsername(
+    request.headers.get("cookie") ?? "",
+    authEnv(),
+  );
+  if (!username) {
+    return NextResponse.json(
+      { error: "Sign in is required to delete a training video." },
+      { status: 401 },
+    );
+  }
+  if (!canDeleteVideo(username)) {
+    return NextResponse.json(
+      { error: "Your account does not have permission to delete training videos." },
+      { status: 403 },
+    );
+  }
+
+  let body: DeleteVideoRequest;
+  try {
+    body = await request.json() as DeleteVideoRequest;
+  } catch {
+    return NextResponse.json({ error: "A video ID is required." }, { status: 400 });
+  }
+
+  const uid = typeof body.uid === "string" ? body.uid.trim() : "";
+  if (!/^[a-f0-9]{32}$/i.test(uid)) {
+    return NextResponse.json({ error: "The video ID is invalid." }, { status: 400 });
+  }
+
+  const env = getEnvironment();
+  if (!env.accountId || !env.apiToken) {
+    return NextResponse.json(
+      { error: "Cloudflare Stream is not configured for this deployment." },
+      { status: 503 },
+    );
+  }
+
+  try {
+    const response = await fetch(
+      `https://api.cloudflare.com/client/v4/accounts/${encodeURIComponent(env.accountId)}/stream/${encodeURIComponent(uid)}`,
+      {
+        method: "DELETE",
+        headers: {
+          Authorization: `Bearer ${env.apiToken}`,
+          "Content-Type": "application/json",
+        },
+      },
+    );
+    const payload = (await response.json().catch(() => ({}))) as {
+      success?: boolean;
+      errors?: Array<{ message?: string }>;
+    };
+    if (!response.ok || !payload.success) {
+      throw new Error(
+        payload.errors?.[0]?.message ||
+          `Cloudflare Stream could not delete the video (${response.status}).`,
+      );
+    }
+
+    return NextResponse.json(
+      { deleted: true, uid, deletedBy: username },
+      { headers: { "Cache-Control": "no-store" } },
+    );
+  } catch (error) {
+    return NextResponse.json(
+      {
+        error: error instanceof Error
+          ? error.message
+          : "The training video could not be deleted.",
       },
       { status: 502 },
     );

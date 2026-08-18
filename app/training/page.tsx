@@ -25,6 +25,7 @@ type Course = {
 
 type StreamLibraryResponse = {
   connected: boolean;
+  canDelete?: boolean;
   streamHost?: string;
   refreshedAt?: string;
   error?: string;
@@ -284,6 +285,8 @@ export default function TrainingPage() {
   const [youtubeCourses, setYoutubeCourses] = useState<Course[]>([]);
   const [library, setLibrary] = useState<StreamLibraryResponse>({ connected: false, videos: [] });
   const [libraryLoading, setLibraryLoading] = useState(true);
+  const [deletingId, setDeletingId] = useState("");
+  const [deleteNotice, setDeleteNotice] = useState<{ message: string; error: boolean } | null>(null);
   const [config, setConfig] = useState<StreamConfig>({
     customerCode: process.env.NEXT_PUBLIC_CLOUDFLARE_STREAM_CUSTOMER_CODE ?? "",
     videoIds: Object.fromEntries(courses.map((course) => [course.id, course.videoUid])),
@@ -591,6 +594,55 @@ export default function TrainingPage() {
     setUploadOpen(true);
   }
 
+  async function deleteCourse(course: Course) {
+    const confirmed = window.confirm(
+      `Permanently delete “${course.title}” from the training library? This cannot be undone.`,
+    );
+    if (!confirmed) return;
+
+    setDeletingId(course.id);
+    setDeleteNotice(null);
+    try {
+      if (course.source === "youtube") {
+        setYoutubeCourses((current) => {
+          const next = current.filter((item) => item.id !== course.id);
+          window.localStorage.setItem(youtubeKey, JSON.stringify(next));
+          return next;
+        });
+      } else if (course.source === "stream") {
+        const response = await fetch("/api/training/videos", {
+          method: "DELETE",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ uid: course.videoUid }),
+        });
+        const payload = (await response.json().catch(() => ({}))) as { error?: string };
+        if (!response.ok) {
+          throw new Error(payload.error || "The training video could not be deleted.");
+        }
+        await refreshLibrary();
+      } else {
+        throw new Error("This built-in module cannot be deleted.");
+      }
+
+      setCompleted((current) => {
+        const next = current.filter((id) => id !== course.id);
+        window.localStorage.setItem(progressKey, JSON.stringify(next));
+        return next;
+      });
+      if (activeId === course.id) {
+        setActiveId(libraryCourses.find((item) => item.id !== course.id)?.id ?? courses[0].id);
+      }
+      setDeleteNotice({ message: `“${course.title}” was deleted.`, error: false });
+    } catch (error) {
+      setDeleteNotice({
+        message: error instanceof Error ? error.message : "The training video could not be deleted.",
+        error: true,
+      });
+    } finally {
+      setDeletingId("");
+    }
+  }
+
   return (
     <div className="training-shell">
       <aside className="training-sidebar">
@@ -682,6 +734,11 @@ export default function TrainingPage() {
           <div className="training-topic-filter" role="group" aria-label="Filter training by topic">
             {categories.map((item) => <button className={category === item ? "active" : ""} type="button" key={item} onClick={() => setCategory(item)}>{item}</button>)}
           </div>
+          {deleteNotice && (
+            <div className={deleteNotice.error ? "training-delete-notice error" : "training-delete-notice"} role={deleteNotice.error ? "alert" : "status"}>
+              {deleteNotice.message}
+            </div>
+          )}
           <div className="training-grid">
             {filteredCourses.map((course, index) => {
               const connected = Boolean(course.youtubeId || (streamHost && (config.videoIds[course.id] || course.videoUid) && course.ready !== false && !course.requiresSignedUrls));
@@ -697,7 +754,20 @@ export default function TrainingPage() {
                     <div><span>{course.category}</span><span>{course.duration}</span></div>
                     <h3>{course.title}</h3>
                     <p>{course.description}</p>
-                    <button type="button" onClick={() => markComplete(course.id)}><span>{done ? "✓" : "○"}</span>{done ? "Complete" : "Mark complete"}</button>
+                    <div className="training-card-actions">
+                      <button type="button" onClick={() => markComplete(course.id)}><span>{done ? "✓" : "○"}</span>{done ? "Complete" : "Mark complete"}</button>
+                      {(course.source === "youtube" || (course.source === "stream" && library.canDelete)) && (
+                        <button
+                          className="training-delete-video"
+                          type="button"
+                          disabled={deletingId === course.id}
+                          onClick={() => void deleteCourse(course)}
+                          aria-label={`Delete ${course.title}`}
+                        >
+                          {deletingId === course.id ? "Deleting…" : "Delete"}
+                        </button>
+                      )}
+                    </div>
                   </div>
                 </article>
               );
