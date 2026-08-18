@@ -83,9 +83,14 @@ test("includes the Cloudflare Stream training academy", async () => {
   assert.match(route, /api\.cloudflare\.com\/client\/v4\/accounts/);
   assert.match(route, /Authorization: `Bearer \$\{env\.apiToken\}`/);
   assert.match(route, /repairPlaybackOrigins/);
+  assert.match(route, /isPlaybackAvailable/);
+  assert.match(route, /method: "HEAD"/);
+  assert.match(route, /deliveryError/);
   assert.match(route, /allowedOrigins/);
   assert.match(route, /vivadspark\.netlify\.app/);
   assert.match(page, /library\.refreshedAt \?\? "initial"/);
+  assert.match(page, /Cloudflare could not deliver this video/);
+  assert.match(page, /Try playback again/);
   assert.doesNotMatch(route, /NextResponse\.json\([^)]*apiToken/);
   assert.match(envExample, /CLOUDFLARE_STREAM_API_TOKEN=/);
   assert.match(envExample, /CLOUDFLARE_STREAM_CUSTOMER_SUBDOMAIN=/);

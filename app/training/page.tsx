@@ -16,6 +16,7 @@ type Course = {
   videoUid: string;
   thumbnail?: string;
   ready?: boolean;
+  deliveryError?: boolean;
   requiresSignedUrls?: boolean;
   source?: "stream" | "youtube";
   youtubeId?: string;
@@ -39,6 +40,7 @@ type StreamLibraryResponse = {
     durationSeconds: number;
     thumbnail: string;
     ready: boolean;
+    deliveryError?: boolean;
     requiresSignedUrls: boolean;
     created?: string | null;
   }>;
@@ -367,6 +369,7 @@ export default function TrainingPage() {
       videoUid: video.videoUid,
       thumbnail: video.thumbnail,
       ready: video.ready,
+      deliveryError: video.deliveryError,
       requiresSignedUrls: video.requiresSignedUrls,
       created: video.created ?? null,
       source: "stream" as const,
@@ -399,6 +402,7 @@ export default function TrainingPage() {
   const streamHost = library.streamHost || manualStreamHost(config.customerCode);
   const isProtected = Boolean(activeCourse.requiresSignedUrls);
   const isReady = activeCourse.ready !== false;
+  const hasDeliveryError = Boolean(activeCourse.deliveryError);
   const isConnected = Boolean(!isYoutube && streamHost && activeUid?.trim() && isReady && !isProtected);
   const completionRate = libraryCourses.length ? Math.round((completed.filter((id) => libraryCourses.some((course) => course.id === id)).length / libraryCourses.length) * 100) : 0;
 
@@ -648,9 +652,9 @@ export default function TrainingPage() {
             ) : (
               <div className="training-player-empty">
                 <span className="stream-mark"><i /><i /><i /></span>
-                <strong>{isProtected ? "Protected Stream video" : !isReady ? "Video is still processing" : "Connect this module to Cloudflare Stream"}</strong>
-                <p>{isProtected ? "This video requires a signed playback token. Add user authentication before enabling secure viewing on the public Netlify deployment." : !isReady ? "Cloudflare is encoding this video. It will become playable here automatically when processing is complete." : "Add your customer subdomain and this video’s UID to start adaptive playback."}</p>
-                {!isProtected && isReady && <button type="button" onClick={() => setConfigOpen(true)}>Add Stream video</button>}
+                <strong>{isProtected ? "Protected Stream video" : hasDeliveryError ? "Cloudflare could not deliver this video" : !isReady ? "Video is still processing" : "Connect this module to Cloudflare Stream"}</strong>
+                <p>{isProtected ? "This video requires a signed playback token. Add user authentication before enabling secure viewing on the public Netlify deployment." : hasDeliveryError ? "The upload was encoded, but Cloudflare is returning a playback error. Try again now; if it continues, upload the original file again." : !isReady ? "Cloudflare is encoding this video. It will become playable here automatically when processing is complete." : "Add your customer subdomain and this video’s UID to start adaptive playback."}</p>
+                {hasDeliveryError ? <button type="button" onClick={() => void refreshLibrary()}>Try playback again</button> : !isProtected && isReady && <button type="button" onClick={() => setConfigOpen(true)}>Add Stream video</button>}
               </div>
             )}
           </div>

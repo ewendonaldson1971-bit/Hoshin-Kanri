@@ -3,6 +3,7 @@ import { NextResponse } from "next/server";
 type CloudflareVideo = {
   uid?: string;
   allowedOrigins?: string[];
+  deliveryReady?: boolean;
   created?: string;
   duration?: number;
   meta?: Record<string, unknown>;
@@ -72,9 +73,13 @@ async function repairPlaybackOrigins(
   apiToken: string,
 ) {
   const requiredOrigins = configuredOrigins();
-  const videosToRepair = videos.filter((video) =>
-    video.uid && requiredOrigins.some((origin) => !video.allowedOrigins?.includes(origin))
-  );
+  await Promise.all(videos.map(async (video) => {
+    video.deliveryReady = await isPlaybackAvailable(video);
+  }));
+  const videosToRepair = videos.filter((video) => video.uid && (
+    requiredOrigins.some((origin) => !video.allowedOrigins?.includes(origin)) ||
+    (video.readyToStream && !video.deliveryReady)
+  ));
 
   await Promise.all(videosToRepair.map(async (video) => {
     const allowedOrigins = Array.from(new Set([
@@ -89,7 +94,11 @@ async function repairPlaybackOrigins(
           Authorization: `Bearer ${apiToken}`,
           "Content-Type": "application/json",
         },
-        body: JSON.stringify({ uid: video.uid, allowedOrigins }),
+        body: JSON.stringify({
+          uid: video.uid,
+          allowedOrigins,
+          ...(video.deliveryReady ? {} : { thumbnailTimestampPct: 0.2 }),
+        }),
       },
     );
     const payload = (await response.json()) as CloudflareResponse;
@@ -100,9 +109,24 @@ async function repairPlaybackOrigins(
       );
     }
     video.allowedOrigins = allowedOrigins;
+    if (!video.deliveryReady) video.deliveryReady = await isPlaybackAvailable(video);
   }));
 
   return videosToRepair.length;
+}
+
+async function isPlaybackAvailable(video: CloudflareVideo) {
+  if (!video.readyToStream || !video.thumbnail) return false;
+  try {
+    const response = await fetch(video.thumbnail, {
+      method: "HEAD",
+      cache: "no-store",
+      headers: { Referer: "https://vivadspark.netlify.app/" },
+    });
+    return response.ok;
+  } catch {
+    return false;
+  }
 }
 
 export async function GET() {
@@ -163,8 +187,11 @@ export async function GET() {
           owner: textMeta(video.meta, "owner") || "Vivad",
           durationSeconds: Math.max(0, Math.round(video.duration ?? 0)),
           thumbnail: video.thumbnail ?? "",
-          ready: Boolean(video.readyToStream),
-          status: video.status?.state ?? "unknown",
+          ready: Boolean(video.readyToStream && video.deliveryReady),
+          deliveryError: Boolean(video.readyToStream && !video.deliveryReady),
+          status: video.readyToStream && !video.deliveryReady
+            ? "delivery-error"
+            : video.status?.state ?? "unknown",
           progress: video.status?.pctComplete ?? null,
           requiresSignedUrls: Boolean(video.requireSignedURLs),
           created: video.created ?? null,
