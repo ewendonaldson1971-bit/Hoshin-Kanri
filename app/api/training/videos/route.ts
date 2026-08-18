@@ -337,7 +337,9 @@ export async function DELETE(request: Request) {
       success?: boolean;
       errors?: Array<{ message?: string }>;
     };
-    if (!response.ok || !payload.success) {
+    // Cloudflare's Stream delete endpoint returns no response body on success.
+    // Only an HTTP failure or an explicit `success: false` is an error.
+    if (!response.ok || payload.success === false) {
       throw new Error(
         payload.errors?.[0]?.message ||
           `Cloudflare Stream could not delete the video (${response.status}).`,

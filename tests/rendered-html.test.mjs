@@ -107,6 +107,9 @@ test("includes the Cloudflare Stream training academy", async () => {
   assert.match(page, /<svg viewBox="0 0 24 24"/);
   assert.match(route, /\^\[a-f0-9\]\{32\}\$/i);
   assert.match(route, /method: "DELETE"/);
+  assert.match(route, /export async function DELETE[\s\S]*payload\.success === false/);
+  assert.match(page, /videos: current\.videos\.filter/);
+  assert.match(page, /window\.setTimeout\(\(\) => void refreshLibrary\(\), 1500\)/);
   assert.match(route, /deletedBy: username/);
   assert.doesNotMatch(route, /NextResponse\.json\([^)]*apiToken/);
   assert.match(envExample, /CLOUDFLARE_STREAM_API_TOKEN=/);

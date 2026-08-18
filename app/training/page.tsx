@@ -621,7 +621,12 @@ export default function TrainingPage() {
         if (!response.ok) {
           throw new Error(payload.error || "The training video could not be deleted.");
         }
-        await refreshLibrary();
+        setLibrary((current) => ({
+          ...current,
+          videos: current.videos.filter((video) => video.videoUid !== course.videoUid),
+          refreshedAt: new Date().toISOString(),
+        }));
+        window.setTimeout(() => void refreshLibrary(), 1500);
       } else {
         throw new Error("This built-in module cannot be deleted.");
       }
