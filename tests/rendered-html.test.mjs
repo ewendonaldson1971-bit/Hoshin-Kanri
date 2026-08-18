@@ -103,7 +103,16 @@ test("provides public access to the Stream and YouTube video uploader", async ()
   assert.match(page, /youtube-nocookie\.com\/embed/);
   assert.match(page, /vivad-youtube-training-links/);
   assert.match(page, /onDrop=\{dropFile\}/);
+  assert.match(page, /MAX_VIDEO_UPLOAD_BYTES = 1024 \* 1024 \* 1024/);
+  assert.match(page, /TUS_CHUNK_BYTES = 50 \* 1024 \* 1024/);
+  assert.match(page, /uploadVideoWithTus/);
+  assert.match(page, /maximum 1 GB/);
+  assert.doesNotMatch(page, /maximum 200 MB/);
   assert.match(uploadRoute, /stream\/direct_upload/);
+  assert.match(uploadRoute, /stream\?direct_user=true/);
+  assert.match(uploadRoute, /"Tus-Resumable": "1\.0\.0"/);
+  assert.match(uploadRoute, /"Upload-Length": String\(uploadLength\)/);
+  assert.match(uploadRoute, /MAX_VIDEO_UPLOAD_BYTES = 1024 \* 1024 \* 1024/);
   assert.doesNotMatch(uploadRoute, /getHoshinSessionUsername/);
   assert.doesNotMatch(page, /Upload access key/);
   assert.doesNotMatch(uploadRoute, /CLOUDFLARE_STREAM_UPLOAD_SECRET/);

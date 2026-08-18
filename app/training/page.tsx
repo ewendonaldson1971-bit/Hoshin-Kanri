@@ -131,6 +131,9 @@ const courses: Course[] = [
 const configKey = "vivad-stream-training-config";
 const progressKey = "vivad-stream-training-progress";
 const youtubeKey = "vivad-youtube-training-links";
+const BASIC_UPLOAD_MAX_BYTES = 200 * 1024 * 1024;
+const MAX_VIDEO_UPLOAD_BYTES = 1024 * 1024 * 1024;
+const TUS_CHUNK_BYTES = 50 * 1024 * 1024;
 
 function youtubeVideoId(value: string) {
   try {
@@ -151,6 +154,102 @@ function fileSize(bytes: number) {
   return bytes >= 1024 * 1024
     ? `${(bytes / (1024 * 1024)).toFixed(1)} MB`
     : `${Math.max(1, Math.round(bytes / 1024))} KB`;
+}
+
+async function uploadVideoWithTus(
+  file: File,
+  details: {
+    title: string;
+    description: string;
+    category: string;
+    level: string;
+    maxDurationSeconds: number;
+  },
+  onProgress: (percentage: number) => void,
+) {
+  const response = await fetch("/api/training/upload", {
+    method: "POST",
+    headers: {
+      "Tus-Resumable": "1.0.0",
+      "Upload-Length": String(file.size),
+      "X-Upload-Title": encodeURIComponent(details.title),
+      "X-Upload-Description": encodeURIComponent(details.description),
+      "X-Upload-Category": encodeURIComponent(details.category),
+      "X-Upload-Level": encodeURIComponent(details.level),
+      "X-Max-Duration-Seconds": String(details.maxDurationSeconds),
+    },
+  });
+  const location = response.headers.get("Location");
+  if (response.status !== 201 || !location) {
+    const payload = (await response.json().catch(() => ({}))) as { error?: string };
+    throw new Error(payload.error || "The resumable upload could not be prepared.");
+  }
+
+  let offset = 0;
+  let failures = 0;
+  while (offset < file.size) {
+    const end = Math.min(offset + TUS_CHUNK_BYTES, file.size);
+    try {
+      offset = await uploadTusChunk(
+        location,
+        file.slice(offset, end),
+        offset,
+        file.size,
+        onProgress,
+      );
+      failures = 0;
+    } catch (error) {
+      failures += 1;
+      if (failures > 3) throw error;
+      await new Promise((resolve) => window.setTimeout(resolve, failures * 1500));
+      offset = await readTusOffset(location, offset);
+    }
+  }
+}
+
+function uploadTusChunk(
+  location: string,
+  chunk: Blob,
+  offset: number,
+  total: number,
+  onProgress: (percentage: number) => void,
+) {
+  return new Promise<number>((resolve, reject) => {
+    const request = new XMLHttpRequest();
+    request.open("PATCH", location);
+    request.setRequestHeader("Tus-Resumable", "1.0.0");
+    request.setRequestHeader("Upload-Offset", String(offset));
+    request.setRequestHeader("Content-Type", "application/offset+octet-stream");
+    request.upload.onprogress = (event) => {
+      if (event.lengthComputable) {
+        onProgress(Math.round(((offset + event.loaded) / total) * 100));
+      }
+    };
+    request.onload = () => {
+      if (request.status >= 200 && request.status < 300) {
+        resolve(Number(request.getResponseHeader("Upload-Offset")) || offset + chunk.size);
+      } else {
+        reject(new Error(`Cloudflare rejected a video chunk (${request.status}).`));
+      }
+    };
+    request.onerror = () => reject(
+      new Error("The upload was interrupted. It will retry from the last saved chunk."),
+    );
+    request.send(chunk);
+  });
+}
+
+async function readTusOffset(location: string, fallback: number) {
+  try {
+    const response = await fetch(location, {
+      method: "HEAD",
+      headers: { "Tus-Resumable": "1.0.0" },
+    });
+    const offset = Number(response.headers.get("Upload-Offset"));
+    return response.ok && Number.isFinite(offset) ? offset : fallback;
+  } catch {
+    return fallback;
+  }
 }
 
 function formatDuration(seconds: number) {
@@ -384,54 +483,66 @@ export default function TrainingPage() {
       setUploadMessage("Choose a video file to upload.");
       return;
     }
-    if (file.size > 200 * 1024 * 1024) {
+    if (file.size > MAX_VIDEO_UPLOAD_BYTES) {
       setUploadStatus("error");
-      setUploadMessage("This uploader currently accepts files up to 200 MB.");
+      setUploadMessage("This uploader accepts video files up to 1 GB.");
       return;
     }
 
+    const uploadDetails = {
+      title: String(form.get("title") ?? ""),
+      description: String(form.get("description") ?? ""),
+      category: String(form.get("category") ?? "Training"),
+      level: String(form.get("level") ?? "Vivad learning"),
+      maxDurationSeconds: Number(form.get("maxDurationSeconds") ?? 3_600),
+    };
+
     setUploadStatus("preparing");
     setUploadProgress(0);
-    setUploadMessage("Creating a secure one-time upload…");
+    setUploadMessage(
+      file.size > BASIC_UPLOAD_MAX_BYTES
+        ? "Preparing a secure resumable upload…"
+        : "Creating a secure one-time upload…",
+    );
 
     try {
-      const response = await fetch("/api/training/upload", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          title: String(form.get("title") ?? ""),
-          description: String(form.get("description") ?? ""),
-          category: String(form.get("category") ?? "Training"),
-          level: String(form.get("level") ?? "Vivad learning"),
-          maxDurationSeconds: Number(form.get("maxDurationSeconds") ?? 3_600),
-        }),
-      });
-      const payload = (await response.json()) as { uploadURL?: string; error?: string; missing?: string[] };
-      if (!response.ok || !payload.uploadURL) {
-        const missing = payload.missing?.length ? ` Add ${payload.missing.join(", ")} to the deployment environment.` : "";
-        throw new Error(`${payload.error || "The upload could not be prepared."}${missing}`);
+      if (file.size > BASIC_UPLOAD_MAX_BYTES) {
+        setUploadStatus("uploading");
+        setUploadMessage("Uploading to Cloudflare Stream in resumable chunks…");
+        await uploadVideoWithTus(file, uploadDetails, setUploadProgress);
+      } else {
+        const response = await fetch("/api/training/upload", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(uploadDetails),
+        });
+        const payload = (await response.json()) as { uploadURL?: string; error?: string; missing?: string[] };
+        if (!response.ok || !payload.uploadURL) {
+          const missing = payload.missing?.length ? ` Add ${payload.missing.join(", ")} to the deployment environment.` : "";
+          throw new Error(`${payload.error || "The upload could not be prepared."}${missing}`);
+        }
+
+        setUploadStatus("uploading");
+        setUploadMessage("Uploading directly to Cloudflare Stream…");
+        const uploadData = new FormData();
+        uploadData.append("file", file);
+
+        await new Promise<void>((resolve, reject) => {
+          const request = new XMLHttpRequest();
+          request.open("POST", payload.uploadURL as string);
+          request.upload.onprogress = (progressEvent) => {
+            if (progressEvent.lengthComputable) {
+              setUploadProgress(Math.round((progressEvent.loaded / progressEvent.total) * 100));
+            }
+          };
+          request.onload = () => {
+            if (request.status >= 200 && request.status < 300) resolve();
+            else reject(new Error(`Cloudflare rejected the upload (${request.status}).`));
+          };
+          request.onerror = () => reject(new Error("The upload was interrupted. Check your connection and try again."));
+          request.send(uploadData);
+        });
       }
-
-      setUploadStatus("uploading");
-      setUploadMessage("Uploading directly to Cloudflare Stream…");
-      const uploadData = new FormData();
-      uploadData.append("file", file);
-
-      await new Promise<void>((resolve, reject) => {
-        const request = new XMLHttpRequest();
-        request.open("POST", payload.uploadURL as string);
-        request.upload.onprogress = (progressEvent) => {
-          if (progressEvent.lengthComputable) {
-            setUploadProgress(Math.round((progressEvent.loaded / progressEvent.total) * 100));
-          }
-        };
-        request.onload = () => {
-          if (request.status >= 200 && request.status < 300) resolve();
-          else reject(new Error(`Cloudflare rejected the upload (${request.status}).`));
-        };
-        request.onerror = () => reject(new Error("The upload was interrupted. Check your connection and try again."));
-        request.send(uploadData);
-      });
 
       setUploadProgress(100);
       setUploadStatus("processing");
@@ -627,7 +738,7 @@ export default function TrainingPage() {
                 <input ref={fileInputRef} className="training-file-input" name="video" type="file" accept="video/*" onChange={chooseFile} disabled={uploadStatus === "uploading" || uploadStatus === "preparing"} />
                 <span className="training-drop-icon">{selectedFile ? "✓" : "↑"}</span>
                 <strong>{selectedFile ? selectedFile.name : dragActive ? "Drop your video here" : "Drag and drop your video"}</strong>
-                <small>{selectedFile ? `${fileSize(selectedFile.size)} · Click to choose a different file` : "or click to browse · MP4, MOV, WebM · maximum 200 MB"}</small>
+                <small>{selectedFile ? `${fileSize(selectedFile.size)} · Click to choose a different file` : "or click to browse · MP4, MOV, WebM · maximum 1 GB"}</small>
               </label>
             ) : (
               <label className="training-youtube-field"><span>YouTube link</span><div><i>▶</i><input name="youtubeUrl" type="url" placeholder="https://www.youtube.com/watch?v=…" required={uploadSource === "youtube"} autoComplete="off" disabled={uploadStatus === "preparing"} /></div><small>Supports youtube.com, youtu.be, Shorts, and Live links.</small></label>
