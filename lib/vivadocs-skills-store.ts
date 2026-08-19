@@ -30,6 +30,23 @@ export type TrainingRecord = {
   updatedAt: string;
 };
 
+export type SkillsSop = {
+  id: string;
+  reference: string;
+  title: string;
+  department: string;
+};
+
+export type VideoCompletion = {
+  id: string;
+  personId: string;
+  videoUid: string;
+  videoTitle: string;
+  category: string;
+  completedAt: string;
+  updatedAt: string;
+};
+
 type QueryResult<T> = { rows: T[] };
 type QueryClient = {
   query<T extends Record<string, unknown> = Record<string, unknown>>(
@@ -76,7 +93,7 @@ async function transaction<T>(operation: (client: QueryClient) => Promise<T>) {
 
 export async function getSkillsMatrix() {
   const db = database();
-  const [peopleResult, recordResult] = await Promise.all([
+  const [peopleResult, recordResult, sopResult, videoResult] = await Promise.all([
     db.pool.query(
       `SELECT id, name, department, role, created_at, updated_at
        FROM vivadocs_people ORDER BY department, name`,
@@ -85,13 +102,50 @@ export async function getSkillsMatrix() {
       `SELECT id, person_id, sop_id, status, source, completed_at, updated_at
        FROM vivadocs_training_records ORDER BY updated_at DESC`,
     ),
+    db.pool.query(
+      `SELECT id, reference, title, department
+       FROM sops WHERE status = 'Published' ORDER BY reference`,
+    ),
+    db.pool.query(
+      `SELECT id, person_id, video_uid, video_title, category, completed_at, updated_at
+       FROM vivadocs_video_completions ORDER BY completed_at DESC`,
+    ),
   ]);
 
   return {
     departments: SOP_DEPARTMENTS.map((department) => department.name),
     people: (peopleResult.rows as Record<string, unknown>[]).map(mapPerson),
     records: (recordResult.rows as Record<string, unknown>[]).map(mapRecord),
+    sops: (sopResult.rows as Record<string, unknown>[]).map(mapSkillsSop),
+    videoCompletions: (videoResult.rows as Record<string, unknown>[]).map(mapVideoCompletion),
   };
+}
+
+export async function recordVideoCompletion(value: unknown) {
+  const input = asObject(value);
+  const personId = cleanId(input.personId);
+  const videoUid = cleanId(input.videoUid);
+  const videoTitle = cleanText(input.videoTitle, 180);
+  const category = cleanText(input.category, 60) || "Training";
+  if (!personId || !videoUid || !videoTitle) {
+    throw new VivaDocsSkillsValidationError("Select a person and training video.");
+  }
+  const timestamp = new Date().toISOString();
+  const result = await database().pool.query(
+    `INSERT INTO vivadocs_video_completions
+       (id, person_id, video_uid, video_title, category, completed_at, updated_at)
+     SELECT $1, p.id, $3, $4, $5, $6, $6
+     FROM vivadocs_people p WHERE p.id = $2
+     ON CONFLICT (person_id, video_uid) DO UPDATE SET
+       video_title = EXCLUDED.video_title,
+       category = EXCLUDED.category,
+       completed_at = EXCLUDED.completed_at,
+       updated_at = EXCLUDED.updated_at
+     RETURNING id, person_id, video_uid, video_title, category, completed_at, updated_at`,
+    [crypto.randomUUID(), personId, videoUid, videoTitle, category, timestamp],
+  );
+  if (!result.rows[0]) throw new VivaDocsSkillsNotFoundError("Person not found.");
+  return mapVideoCompletion(result.rows[0] as Record<string, unknown>);
 }
 
 export async function addSkillsPerson(value: unknown) {
@@ -242,6 +296,27 @@ function mapRecord(row: Record<string, unknown>): TrainingRecord {
     status: String(row.status) as TrainingStatus,
     source: String(row.source) as TrainingRecord["source"],
     completedAt: row.completed_at ? String(row.completed_at) : "",
+    updatedAt: String(row.updated_at),
+  };
+}
+
+function mapSkillsSop(row: Record<string, unknown>): SkillsSop {
+  return {
+    id: String(row.id),
+    reference: String(row.reference),
+    title: String(row.title),
+    department: String(row.department),
+  };
+}
+
+function mapVideoCompletion(row: Record<string, unknown>): VideoCompletion {
+  return {
+    id: String(row.id),
+    personId: String(row.person_id),
+    videoUid: String(row.video_uid),
+    videoTitle: String(row.video_title),
+    category: String(row.category),
+    completedAt: String(row.completed_at),
     updatedAt: String(row.updated_at),
   };
 }

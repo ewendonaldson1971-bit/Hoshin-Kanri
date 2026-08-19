@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { ChangeEvent, DragEvent, FormEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { MobileWorkspaceNavigation, navigationItem } from "../components/workspace-navigation";
+import { buildPersonSkillsPdf } from "./person-skills-pdf";
 
 type Course = {
   id: string;
@@ -63,7 +64,35 @@ type SkillsPerson = {
 type SkillsDirectoryResponse = {
   departments?: string[];
   people?: SkillsPerson[];
+  records?: SkillRecord[];
+  sops?: SkillSop[];
+  videoCompletions?: VideoCompletion[];
   error?: string;
+};
+
+type SkillRecord = {
+  personId: string;
+  sopId: string;
+  status: string;
+  source: string;
+  completedAt: string;
+};
+
+type SkillSop = {
+  id: string;
+  reference: string;
+  title: string;
+  department: string;
+};
+
+type VideoCompletion = {
+  id: string;
+  personId: string;
+  videoUid: string;
+  videoTitle: string;
+  category: string;
+  completedAt: string;
+  updatedAt: string;
 };
 
 type StreamPlayer = {
@@ -154,6 +183,7 @@ const BASIC_UPLOAD_MAX_BYTES = 200 * 1024 * 1024;
 const MAX_VIDEO_UPLOAD_BYTES = 1024 * 1024 * 1024;
 const TUS_CHUNK_BYTES = 50 * 1024 * 1024;
 const DEFAULT_DEPARTMENTS = ["CST", "Prepress", "Printers", "Cutters", "Fab1", "Framing", "Sew", "Light Box", "Office", "Despatch"];
+const GENERAL_TRAINING_CATEGORIES = ["Operations", "Training", "Quality", "Problem solving", "Strategy", "Leadership", "Safety"];
 
 function personProgressKey(personId: string) {
   return `${progressKey}:${personId}`;
@@ -171,17 +201,19 @@ function parseProgress(value: string | null) {
   }
 }
 
-function loadPersonProgress(personId: string) {
+function loadPersonProgress(personId: string, databaseProgress: string[] = []) {
   const scopedKey = personProgressKey(personId);
   const scopedValue = window.localStorage.getItem(scopedKey);
-  if (scopedValue !== null) return parseProgress(scopedValue);
+  if (scopedValue !== null) {
+    return Array.from(new Set([...parseProgress(scopedValue), ...databaseProgress]));
+  }
 
   const legacyProgress = parseProgress(window.localStorage.getItem(progressKey));
   if (legacyProgress.length) {
     window.localStorage.setItem(scopedKey, JSON.stringify(legacyProgress));
     window.localStorage.removeItem(progressKey);
   }
-  return legacyProgress;
+  return Array.from(new Set([...legacyProgress, ...databaseProgress]));
 }
 
 function youtubeVideoId(value: string) {
@@ -322,10 +354,16 @@ export default function TrainingPage() {
   const [completed, setCompleted] = useState<string[]>([]);
   const [departments, setDepartments] = useState<string[]>(DEFAULT_DEPARTMENTS);
   const [people, setPeople] = useState<SkillsPerson[]>([]);
+  const [skillRecords, setSkillRecords] = useState<SkillRecord[]>([]);
+  const [skillSops, setSkillSops] = useState<SkillSop[]>([]);
+  const [videoCompletions, setVideoCompletions] = useState<VideoCompletion[]>([]);
   const [selectedDepartment, setSelectedDepartment] = useState("Despatch");
   const [selectedPersonId, setSelectedPersonId] = useState("");
   const [peopleLoading, setPeopleLoading] = useState(true);
   const [peopleError, setPeopleError] = useState("");
+  const [completingId, setCompletingId] = useState("");
+  const [reportBusy, setReportBusy] = useState(false);
+  const [reportMessage, setReportMessage] = useState("");
   const [configOpen, setConfigOpen] = useState(false);
   const [uploadOpen, setUploadOpen] = useState(false);
   const [uploadProgress, setUploadProgress] = useState(0);
@@ -374,6 +412,7 @@ export default function TrainingPage() {
 
       const nextDepartments = payload.departments?.length ? payload.departments : DEFAULT_DEPARTMENTS;
       const nextPeople = payload.people ?? [];
+      const nextVideoCompletions = payload.videoCompletions ?? [];
       const savedPersonId = window.localStorage.getItem(selectedPersonKey) ?? "";
       const savedPerson = nextPeople.find((person) => person.id === savedPersonId);
       const savedDepartment = window.localStorage.getItem(selectedDepartmentKey) ?? "";
@@ -381,10 +420,16 @@ export default function TrainingPage() {
 
       setDepartments(nextDepartments);
       setPeople(nextPeople);
+      setSkillRecords(payload.records ?? []);
+      setSkillSops(payload.sops ?? []);
+      setVideoCompletions(nextVideoCompletions);
       setSelectedDepartment(nextDepartment);
       setSelectedPersonId(savedPerson?.id ?? "");
       selectedPersonIdRef.current = savedPerson?.id ?? "";
-      setCompleted(savedPerson ? loadPersonProgress(savedPerson.id) : []);
+      setCompleted(savedPerson ? loadPersonProgress(
+        savedPerson.id,
+        nextVideoCompletions.filter((item) => item.personId === savedPerson.id).map((item) => item.videoUid),
+      ) : []);
     } catch (error) {
       setPeopleError(error instanceof Error ? error.message : "The people directory could not be loaded.");
       setCompleted([]);
@@ -493,18 +538,42 @@ export default function TrainingPage() {
   const departmentPeople = people.filter((person) => person.department === selectedDepartment);
   const completedCount = completed.filter((id) => libraryCourses.some((course) => course.id === id)).length;
 
-  function markComplete(courseId: string) {
-    if (!selectedPersonId) {
+  async function markComplete(course: Course, personId = selectedPersonIdRef.current) {
+    if (!personId) {
       setPeopleError("Select the person watching before recording progress.");
       return;
     }
-    setCompleted((current) => {
-      const next = current.includes(courseId)
-        ? current.filter((id) => id !== courseId)
-        : [...current, courseId];
-      window.localStorage.setItem(personProgressKey(selectedPersonId), JSON.stringify(next));
-      return next;
-    });
+    const savedProgress = parseProgress(window.localStorage.getItem(personProgressKey(personId)));
+    if (savedProgress.includes(course.id)) return;
+    setCompletingId(course.id);
+    setPeopleError("");
+    try {
+      const response = await fetch("/api/vivadocs/skills", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          action: "completeVideo",
+          personId,
+          videoUid: course.videoUid || course.id,
+          videoTitle: course.title,
+          category: course.category,
+        }),
+      });
+      const payload = (await response.json()) as { result?: VideoCompletion; error?: string };
+      if (!response.ok || !payload.result) throw new Error(payload.error || "Video completion could not be saved.");
+      setVideoCompletions((current) => [
+        payload.result as VideoCompletion,
+        ...current.filter((item) => !(item.personId === personId && item.videoUid === (course.videoUid || course.id))),
+      ]);
+    } catch (error) {
+      setPeopleError(error instanceof Error ? error.message : "Video completion could not be saved.");
+      return;
+    } finally {
+      setCompletingId("");
+    }
+    const next = [...savedProgress, course.id];
+    window.localStorage.setItem(personProgressKey(personId), JSON.stringify(next));
+    if (selectedPersonIdRef.current === personId) setCompleted(next);
   }
 
   function connectPlayer() {
@@ -513,12 +582,7 @@ export default function TrainingPage() {
     player.addEventListener("ended", () => {
       const personId = selectedPersonIdRef.current;
       if (!personId) return;
-      setCompleted((current) => {
-        if (current.includes(activeCourse.id)) return current;
-        const next = [...current, activeCourse.id];
-        window.localStorage.setItem(personProgressKey(personId), JSON.stringify(next));
-        return next;
-      });
+      void markComplete(activeCourse);
     });
   }
 
@@ -547,7 +611,48 @@ export default function TrainingPage() {
       window.localStorage.setItem(selectedDepartmentKey, person.department);
     }
     window.localStorage.setItem(selectedPersonKey, personId);
-    setCompleted(loadPersonProgress(personId));
+    setCompleted(loadPersonProgress(
+      personId,
+      videoCompletions.filter((item) => item.personId === personId).map((item) => item.videoUid),
+    ));
+  }
+
+  async function downloadSkillsReport() {
+    if (!selectedPerson) return;
+    setReportBusy(true);
+    setReportMessage("");
+    try {
+      const sopById = new Map(skillSops.map((sop) => [sop.id, sop]));
+      const report = await buildPersonSkillsPdf({
+        person: selectedPerson,
+        sopSkills: skillRecords
+          .filter((record) => record.personId === selectedPerson.id && ["Competent", "Trainer"].includes(record.status))
+          .map((record) => {
+            const sop = sopById.get(record.sopId);
+            return {
+              reference: sop?.reference ?? "SOP",
+              title: sop?.title ?? "Controlled procedure",
+              status: record.status,
+              source: record.source,
+              completedAt: record.completedAt,
+            };
+          }),
+        videos: videoCompletions
+          .filter((record) => record.personId === selectedPerson.id)
+          .map((record) => ({ title: record.videoTitle, category: record.category, completedAt: record.completedAt })),
+      });
+      const url = URL.createObjectURL(report.blob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = report.filename;
+      link.click();
+      window.setTimeout(() => URL.revokeObjectURL(url), 30_000);
+      setReportMessage(`PDF created with ${report.pageCount} page${report.pageCount === 1 ? "" : "s"}.`);
+    } catch (error) {
+      setReportMessage(error instanceof Error ? error.message : "The skills PDF could not be created.");
+    } finally {
+      setReportBusy(false);
+    }
   }
 
   function renderProgressCard(className = "") {
@@ -573,6 +678,10 @@ export default function TrainingPage() {
           </select>
         </label>
         {peopleError && <p className="training-progress-error" role="alert">{peopleError}</p>}
+        <button className="training-skills-pdf" type="button" disabled={!selectedPerson || reportBusy} onClick={() => void downloadSkillsReport()}>
+          {reportBusy ? "Creating PDF…" : "Download skills PDF"}
+        </button>
+        {reportMessage && <p className="training-report-message" role="status">{reportMessage}</p>}
         <div className="training-progress-track"><i style={{ width: `${completionRate}%` }} /></div>
         <small>{completedCount} of {libraryCourses.length} modules complete</small>
       </div>
@@ -876,7 +985,7 @@ export default function TrainingPage() {
             <h2>{activeCourse.title}</h2>
             <p>{activeCourse.description}</p>
             <div className="training-owner"><span>{activeCourse.owner.slice(0, 2).toUpperCase()}</span><div><small>CONTENT OWNER</small><strong>{activeCourse.owner}</strong></div></div>
-            <button className={completed.includes(activeCourse.id) ? "module-complete completed" : "module-complete"} type="button" onClick={() => markComplete(activeCourse.id)} disabled={!selectedPersonId} title={!selectedPersonId ? "Select the person watching to record progress" : undefined}>
+            <button className={completed.includes(activeCourse.id) ? "module-complete completed" : "module-complete"} type="button" onClick={() => void markComplete(activeCourse)} disabled={!selectedPersonId || completingId === activeCourse.id} title={!selectedPersonId ? "Select the person watching to record progress" : undefined}>
               <span>{completed.includes(activeCourse.id) ? "✓" : "○"}</span>
               {completed.includes(activeCourse.id) ? "Completed" : "Mark as complete"}
             </button>
@@ -929,7 +1038,7 @@ export default function TrainingPage() {
                     <div><span>{course.category}</span><span>{course.duration}</span></div>
                     <h3>{course.title}</h3>
                     <p>{course.description}</p>
-                    <div className="training-card-actions"><button type="button" onClick={() => markComplete(course.id)} disabled={!selectedPersonId} title={!selectedPersonId ? "Select the person watching to record progress" : undefined}><span>{done ? "✓" : "○"}</span>{done ? "Complete" : "Mark complete"}</button></div>
+                    <div className="training-card-actions"><button type="button" onClick={() => void markComplete(course)} disabled={!selectedPersonId || completingId === course.id} title={!selectedPersonId ? "Select the person watching to record progress" : undefined}><span>{done ? "✓" : "○"}</span>{completingId === course.id ? "Saving…" : done ? "Complete" : "Mark complete"}</button></div>
                   </div>
                 </article>
               );
@@ -981,7 +1090,7 @@ export default function TrainingPage() {
             )}
             <div className="training-upload-fields">
               <label><span>Title</span><input name="title" placeholder="e.g. How to record a non-conformance" required disabled={uploadStatus === "uploading" || uploadStatus === "preparing"} /></label>
-              <label><span>Topic</span><select name="category" defaultValue="Quality" disabled={uploadStatus === "uploading" || uploadStatus === "preparing"}><option>Quality</option><option>Problem solving</option><option>Operations</option><option>Strategy</option><option>Leadership</option><option>Safety</option><option>Training</option></select></label>
+              <label><span>Library / department</span><select name="category" defaultValue="Quality" disabled={uploadStatus === "uploading" || uploadStatus === "preparing"}>{Array.from(new Set([...GENERAL_TRAINING_CATEGORIES, ...departments])).map((item) => <option key={item}>{item}</option>)}</select></label>
               <label className="training-upload-wide"><span>Description</span><textarea name="description" rows={3} placeholder="What will people learn?" disabled={uploadStatus === "uploading" || uploadStatus === "preparing"} /></label>
               <label><span>Level</span><select name="level" defaultValue="Vivad learning" disabled={uploadStatus === "uploading" || uploadStatus === "preparing"}><option>Essential</option><option>Core skill</option><option>Leader practice</option><option>Vivad learning</option></select></label>
               {uploadSource === "file" && <label><span>Maximum duration</span><select name="maxDurationSeconds" defaultValue="3600" disabled={uploadStatus === "uploading" || uploadStatus === "preparing"}><option value="600">10 minutes</option><option value="1800">30 minutes</option><option value="3600">60 minutes</option><option value="7200">2 hours</option></select></label>}

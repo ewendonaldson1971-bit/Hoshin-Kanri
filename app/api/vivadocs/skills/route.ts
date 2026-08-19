@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import {
   addSkillsPerson,
   getSkillsMatrix,
+  recordVideoCompletion,
   recordSopCompletion,
   removeSkillsPerson,
   transferSkillsPerson,
@@ -42,6 +43,9 @@ export async function POST(request: Request) {
         break;
       case "completeSop":
         result = await recordSopCompletion(body);
+        break;
+      case "completeVideo":
+        result = await recordVideoCompletion(body);
         break;
       default:
         throw new VivaDocsSkillsValidationError("Select a valid skills action.");

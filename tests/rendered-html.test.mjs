@@ -105,7 +105,7 @@ test("includes the Cloudflare Stream training academy", async () => {
   assert.match(page, /selectedPerson\?\.name/);
   assert.match(page, /personProgressKey\(selectedPersonId\)/);
   assert.match(page, /selectedPersonIdRef\.current/);
-  assert.match(page, /disabled=\{!selectedPersonId\}/);
+  assert.match(page, /disabled=\{!selectedPersonId \|\| completingId/);
   assert.match(route, /export async function DELETE\(request: Request\)/);
   assert.match(route, /getHoshinSessionUsername/);
   assert.match(route, /createDeleteCapability/);
@@ -159,6 +159,49 @@ test("provides public access to the Stream and YouTube video uploader", async ()
   assert.doesNotMatch(uploadRoute, /getHoshinSessionUsername/);
   assert.doesNotMatch(page, /Upload access key/);
   assert.doesNotMatch(uploadRoute, /CLOUDFLARE_STREAM_UPLOAD_SECRET/);
+});
+
+test("training videos support department libraries, durable completion records and person skills PDFs", async () => {
+  const [page, report, skillsRoute, skillsStore, skillsMatrix, schema, migration, css] = await Promise.all([
+    readFile(new URL("../app/training/page.tsx", import.meta.url), "utf8"),
+    readFile(new URL("../app/training/person-skills-pdf.ts", import.meta.url), "utf8"),
+    readFile(new URL("../app/api/vivadocs/skills/route.ts", import.meta.url), "utf8"),
+    readFile(new URL("../lib/vivadocs-skills-store.ts", import.meta.url), "utf8"),
+    readFile(new URL("../app/vivadocs/skills-matrix.tsx", import.meta.url), "utf8"),
+    readFile(new URL("../db/schema.ts", import.meta.url), "utf8"),
+    readFile(new URL("../netlify/database/migrations/20260819090000_create_training_video_completions/migration.sql", import.meta.url), "utf8"),
+    readFile(new URL("../app/globals.css", import.meta.url), "utf8"),
+  ]);
+
+  for (const department of ["CST", "Prepress", "Printers", "Cutters", "Fab1", "Framing", "Sew", "Light Box", "Office", "Despatch"]) {
+    assert.match(page, new RegExp(`"${department}"`));
+  }
+  for (const category of ["Operations", "Training", "Quality"]) assert.match(page, new RegExp(`"${category}"`));
+  assert.match(page, /Library \/ department/);
+  assert.match(page, /action: "completeVideo"/);
+  assert.match(page, /videoUid: course\.videoUid \|\| course\.id/);
+  assert.match(page, /buildPersonSkillsPdf/);
+  assert.match(page, /Download skills PDF/);
+  assert.match(page, /URL\.createObjectURL/);
+  assert.match(skillsRoute, /case "completeVideo"/);
+  assert.match(skillsStore, /export async function recordVideoCompletion/);
+  assert.match(skillsStore, /INSERT INTO vivadocs_video_completions/);
+  assert.match(skillsStore, /ON CONFLICT \(person_id, video_uid\) DO UPDATE/);
+  assert.match(skillsStore, /videoCompletions/);
+  assert.match(skillsMatrix, /Training videos watched/);
+  assert.match(skillsMatrix, /SHARED_VIDEO_LIBRARIES/);
+  assert.match(skillsMatrix, /departmentVideoCompletions/);
+  assert.match(schema, /pgTable\("vivadocs_video_completions"/);
+  assert.match(migration, /CREATE TABLE IF NOT EXISTS vivadocs_video_completions/);
+  assert.match(migration, /UNIQUE \(person_id, video_uid\)/);
+  assert.match(report, /LOGO_URL = "\/vivad-logo\.png"/);
+  assert.match(report, /pdf\.addImage\(logoData/);
+  assert.match(report, /SOP skills acquired/);
+  assert.match(report, /Training videos watched/);
+  assert.match(report, /Page \$\{page\} of \$\{pages\}/);
+  assert.match(report, /Training-and-Skills\.pdf/);
+  assert.match(css, /\.training-skills-pdf/);
+  assert.match(css, /\.skills-video-table/);
 });
 
 test("includes the interactive VivaDocs controlled-document workspace", async () => {

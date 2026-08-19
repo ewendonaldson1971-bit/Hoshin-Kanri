@@ -22,6 +22,7 @@ const TRAINING_STATUSES = [
   "Trainer",
   "Expired",
 ] as const;
+const SHARED_VIDEO_LIBRARIES = ["Operations", "Training", "Quality"];
 
 type TrainingStatus = (typeof TRAINING_STATUSES)[number];
 type Department = (typeof DEPARTMENTS)[number];
@@ -48,6 +49,14 @@ type TrainingRecord = {
   completedAt: string;
   updatedAt: string;
 };
+type VideoCompletion = {
+  id: string;
+  personId: string;
+  videoUid: string;
+  videoTitle: string;
+  category: string;
+  completedAt: string;
+};
 type Dialog =
   | { kind: "add" }
   | { kind: "transfer" }
@@ -65,6 +74,7 @@ export function SkillsMatrix({
   const [department, setDepartment] = useState<Department>("Despatch");
   const [people, setPeople] = useState<Person[]>([]);
   const [records, setRecords] = useState<TrainingRecord[]>([]);
+  const [videoCompletions, setVideoCompletions] = useState<VideoCompletion[]>([]);
   const [dialog, setDialog] = useState<Dialog>(null);
   const [busy, setBusy] = useState(false);
   const [loading, setLoading] = useState(true);
@@ -100,6 +110,14 @@ export function SkillsMatrix({
     () => new Map(records.map((record) => [`${record.personId}:${record.sopId}`, record])),
     [records],
   );
+  const departmentVideoCompletions = useMemo(() => {
+    const personIds = new Set(departmentPeople.map((person) => person.id));
+    return videoCompletions.filter(
+      (record) =>
+        personIds.has(record.personId) &&
+        (record.category === department || SHARED_VIDEO_LIBRARIES.includes(record.category)),
+    );
+  }, [department, departmentPeople, videoCompletions]);
 
   async function refresh() {
     try {
@@ -108,11 +126,13 @@ export function SkillsMatrix({
       const result = (await response.json()) as {
         people?: Person[];
         records?: TrainingRecord[];
+        videoCompletions?: VideoCompletion[];
         error?: string;
       };
       if (!response.ok) throw new Error(result.error || "Could not load skills data.");
       setPeople(result.people ?? []);
       setRecords(result.records ?? []);
+      setVideoCompletions(result.videoCompletions ?? []);
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : "Could not load skills data.");
     } finally {
@@ -280,6 +300,39 @@ export function SkillsMatrix({
           </div>
         </div>
       )}
+
+      <section className="skills-video-completions" aria-labelledby="skills-video-heading">
+        <div>
+          <span>VIDEO LEARNING</span>
+          <h3 id="skills-video-heading">Training videos watched</h3>
+          <p>Completed clips from {department} and the shared Operations, Training and Quality libraries.</p>
+        </div>
+        {!departmentVideoCompletions.length ? (
+          <div className="vivadocs-empty">
+            <strong>No completed videos recorded for {department}</strong>
+            <span>Watched clips will appear here when a team member completes them in Training Academy.</span>
+          </div>
+        ) : (
+          <div className="skills-video-table-scroll" tabIndex={0} aria-label={`${department} completed training videos`}>
+            <table className="skills-video-table">
+              <thead><tr><th>Team member</th><th>Video</th><th>Library</th><th>Completed</th></tr></thead>
+              <tbody>
+                {departmentVideoCompletions.map((record) => {
+                  const person = people.find((item) => item.id === record.personId);
+                  return (
+                    <tr key={record.id}>
+                      <td>{person?.name ?? "Team member"}</td>
+                      <td>{record.videoTitle}</td>
+                      <td>{record.category}</td>
+                      <td>{new Date(record.completedAt).toLocaleDateString("en-AU")}</td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </section>
 
       {dialog && (
         <SkillsDialog

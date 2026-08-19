@@ -55,3 +55,28 @@ export const sopSteps = pgTable("sop_steps", {
   uniqueIndex("idx_sop_steps_position").on(table.sopId, table.position),
   index("idx_sop_steps_sop_id").on(table.sopId),
 ]);
+
+export const vivadocsPeople = pgTable("vivadocs_people", {
+  id: text("id").primaryKey(),
+  name: text("name").notNull(),
+  department: text("department").notNull(),
+  role: text("role").notNull(),
+  createdAt: text("created_at").notNull(),
+  updatedAt: text("updated_at").notNull(),
+}, (table) => [
+  uniqueIndex("idx_vivadocs_people_name").on(table.name),
+  index("idx_vivadocs_people_department").on(table.department, table.name),
+]);
+
+export const vivadocsVideoCompletions = pgTable("vivadocs_video_completions", {
+  id: text("id").primaryKey(),
+  personId: text("person_id").notNull().references(() => vivadocsPeople.id, { onDelete: "cascade" }),
+  videoUid: text("video_uid").notNull(),
+  videoTitle: text("video_title").notNull(),
+  category: text("category").notNull(),
+  completedAt: text("completed_at").notNull(),
+  updatedAt: text("updated_at").notNull(),
+}, (table) => [
+  uniqueIndex("idx_vivadocs_video_completion_unique").on(table.personId, table.videoUid),
+  index("idx_vivadocs_video_completion_person").on(table.personId, table.completedAt),
+]);
