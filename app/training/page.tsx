@@ -477,6 +477,12 @@ export default function TrainingPage() {
   }, [refreshLibrary]);
 
   useEffect(() => {
+    if (!library.connected || !library.videos.some((video) => !video.ready && !video.requiresSignedUrls)) return;
+    const timer = window.setTimeout(() => void refreshLibrary(), 8_000);
+    return () => window.clearTimeout(timer);
+  }, [library, refreshLibrary]);
+
+  useEffect(() => {
     // Use the same people and departments maintained by the VivaDocs skills matrix.
     // eslint-disable-next-line react-hooks/set-state-in-effect
     void refreshPeople();

@@ -9,6 +9,7 @@ type CloudflareVideo = {
   duration?: number;
   meta?: Record<string, unknown>;
   publicDetails?: { title?: string | null };
+  playback?: { hls?: string; dash?: string };
   readyToStream?: boolean;
   requireSignedURLs?: boolean;
   status?: { state?: string; pctComplete?: string };
@@ -112,13 +113,8 @@ async function repairPlaybackOrigins(
   apiToken: string,
 ) {
   const requiredOrigins = configuredOrigins();
-  await Promise.all(videos.map(async (video) => {
-    video.deliveryReady = await isPlaybackAvailable(video);
-  }));
-  const videosToRepair = videos.filter((video) => video.uid && (
-    requiredOrigins.some((origin) => !video.allowedOrigins?.includes(origin)) ||
-    (isEncodingComplete(video) && !video.deliveryReady)
-  ));
+  const videosToRepair = videos.filter((video) => video.uid &&
+    requiredOrigins.some((origin) => !video.allowedOrigins?.includes(origin)));
 
   await Promise.all(videosToRepair.map(async (video) => {
     const allowedOrigins = Array.from(new Set([
@@ -133,11 +129,7 @@ async function repairPlaybackOrigins(
           Authorization: `Bearer ${apiToken}`,
           "Content-Type": "application/json",
         },
-        body: JSON.stringify({
-          uid: video.uid,
-          allowedOrigins,
-          ...(video.deliveryReady ? {} : { thumbnailTimestampPct: 0.2 }),
-        }),
+        body: JSON.stringify({ uid: video.uid, allowedOrigins }),
       },
     );
     const payload = (await response.json()) as CloudflareResponse;
@@ -148,19 +140,30 @@ async function repairPlaybackOrigins(
       );
     }
     video.allowedOrigins = allowedOrigins;
-    if (!video.deliveryReady) video.deliveryReady = await isPlaybackAvailable(video);
+  }));
+
+  // This is diagnostic only. Cloudflare's playback/thumbnail endpoints can be
+  // briefly unavailable after encoding, so a failed probe must never hide an
+  // otherwise ready video from the player.
+  await Promise.all(videos.map(async (video) => {
+    video.deliveryReady = await isPlaybackAvailable(video);
   }));
 
   return videosToRepair.length;
 }
 
 async function isPlaybackAvailable(video: CloudflareVideo) {
-  if (!isEncodingComplete(video) || !video.thumbnail) return false;
+  if (!isEncodingComplete(video)) return false;
+  const playbackUrl = video.playback?.hls || video.thumbnail;
+  if (!playbackUrl) return true;
   try {
-    const response = await fetch(video.thumbnail, {
-      method: "HEAD",
+    const response = await fetch(playbackUrl, {
+      method: "GET",
       cache: "no-store",
-      headers: { Referer: "https://vivadspark.netlify.app/" },
+      headers: {
+        Referer: "https://vivadspark.netlify.app/",
+        Range: "bytes=0-1023",
+      },
     });
     return response.ok;
   } catch {
@@ -169,8 +172,10 @@ async function isPlaybackAvailable(video: CloudflareVideo) {
 }
 
 function isEncodingComplete(video: CloudflareVideo) {
-  return video.status?.state === "ready" &&
-    Number(video.status.pctComplete ?? 0) >= 100;
+  return Boolean(video.readyToStream) || (
+    video.status?.state === "ready" &&
+    Number(video.status.pctComplete ?? 0) >= 100
+  );
 }
 
 export async function GET(request: Request) {
@@ -236,7 +241,10 @@ export async function GET(request: Request) {
           owner: textMeta(video.meta, "owner") || "Vivad",
           durationSeconds: Math.max(0, Math.round(video.duration ?? 0)),
           thumbnail: video.thumbnail ?? "",
-          ready: Boolean(isEncodingComplete(video) && video.deliveryReady),
+          // Cloudflare's readyToStream/status fields are authoritative. A
+          // transient delivery probe failure is reported separately but does
+          // not prevent the browser player from attempting playback.
+          ready: isEncodingComplete(video),
           deliveryError: Boolean(isEncodingComplete(video) && !video.deliveryReady),
           status: isEncodingComplete(video) && !video.deliveryReady
             ? "delivery-error"
@@ -252,7 +260,7 @@ export async function GET(request: Request) {
     videos.sort((a, b) => (b.created ?? "").localeCompare(a.created ?? ""));
 
     const derivedStreamHost = videos
-      .map((video) => video.thumbnail)
+      .flatMap((video) => [video.thumbnail, sourceVideos.find((item) => item.uid === video.videoUid)?.playback?.hls ?? ""])
       .filter(Boolean)
       .map((thumbnail) => {
         try {
