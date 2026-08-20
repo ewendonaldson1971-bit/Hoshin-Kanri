@@ -112,9 +112,12 @@ test("includes the Cloudflare Stream training academy", async () => {
 
   assert.match(page, /Training Academy/);
   assert.match(page, /cloudflarestream\.com/);
-  assert.match(page, /embed\.cloudflarestream\.com\/embed\/sdk\.latest\.js/);
   assert.match(page, /signed URLs/);
-  assert.match(page, /addEventListener\("ended"/);
+  assert.match(page, /import Hls from "hls\.js"/);
+  assert.match(page, /new Hls\(\{ enableWorker: true \}\)/);
+  assert.match(page, /\/manifest\/video\.m3u8/);
+  assert.match(page, /onEnded=\{onEnded\}/);
+  assert.doesNotMatch(page, /embed\.cloudflarestream\.com\/embed\/sdk/);
   assert.match(page, /\/api\/training\/videos/);
   assert.match(route, /api\.cloudflare\.com\/client\/v4\/accounts/);
   assert.match(route, /Authorization: `Bearer \$\{env\.apiToken\}`/);
@@ -123,6 +126,8 @@ test("includes the Cloudflare Stream training academy", async () => {
   assert.match(route, /isEncodingComplete/);
   assert.match(route, /readyToStream/);
   assert.match(route, /status\?\.state === "ready"/);
+  assert.match(route, /Number\.isFinite\(progress\)/);
+  assert.match(route, /progress >= 100/);
   assert.match(route, /method: "GET"/);
   assert.match(route, /Range: "bytes=0-1023"/);
   assert.match(route, /ready: isEncodingComplete\(video\)/);
@@ -148,10 +153,11 @@ test("includes the Cloudflare Stream training academy", async () => {
   assert.match(page, /disabled=\{!selectedPersonId \|\| completingId/);
   assert.match(route, /export async function DELETE\(request: Request\)/);
   assert.match(route, /getHoshinSessionUsername/);
-  assert.match(route, /createDeleteCapability/);
-  assert.match(route, /verifyDeleteCapability/);
-  assert.match(route, /crypto\.subtle\.sign/);
-  assert.match(page, /course\.source === "stream" && course\.deleteToken/);
+  assert.match(route, /canDelete: Boolean\(username\)/);
+  assert.match(route, /request\.headers\.get\("origin"\)/);
+  assert.match(route, /preferredByTitle/);
+  assert.match(route, /video\.ready && !video\.deliveryError/);
+  assert.match(page, /course\.source === "youtube" \|\| course\.source === "stream"/);
   assert.match(page, /<svg viewBox="0 0 24 24"/);
   assert.match(route, /\^\[a-f0-9\]\{32\}\$/i);
   assert.match(route, /method: "DELETE"/);
@@ -165,6 +171,7 @@ test("includes the Cloudflare Stream training academy", async () => {
   assert.match(envExample, /NEXT_PUBLIC_CLOUDFLARE_STREAM_CUSTOMER_CODE=/);
   assert.match(envExample, /CLOUDFLARE_STREAM_ALLOWED_ORIGINS=vivadspark\.netlify\.app/);
   assert.match(css, /\.training-player iframe/);
+  assert.match(css, /\.training-stream-video video/);
   assert.match(css, /\.stream-modal/);
   assert.match(css, /\.training-delete-video/);
   assert.match(css, /\.training-delete-notice/);

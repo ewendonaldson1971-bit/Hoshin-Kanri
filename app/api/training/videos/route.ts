@@ -24,7 +24,6 @@ type CloudflareResponse = {
 
 type DeleteVideoRequest = {
   uid?: unknown;
-  token?: unknown;
 };
 
 function getEnvironment() {
@@ -40,39 +39,6 @@ function getEnvironment() {
       process.env.NEXT_PUBLIC_CLOUDFLARE_STREAM_CUSTOMER_CODE?.trim() ??
       "",
   };
-}
-
-async function createDeleteCapability(username: string, uid: string, secret: string) {
-  const expires = Math.floor(Date.now() / 1000) + 60 * 60;
-  return `${expires}.${await signDeleteCapability(`${username}.${uid}.${expires}`, secret)}`;
-}
-
-async function verifyDeleteCapability(username: string, uid: string, token: string, secret: string) {
-  const [expiresRaw, signature] = token.split(".");
-  const expires = Number.parseInt(expiresRaw ?? "", 10);
-  if (!Number.isInteger(expires) || expires < Math.floor(Date.now() / 1000) || !signature) return false;
-  const expected = await signDeleteCapability(`${username}.${uid}.${expiresRaw}`, secret);
-  if (signature.length !== expected.length) return false;
-  let difference = 0;
-  for (let index = 0; index < signature.length; index += 1) {
-    difference |= signature.charCodeAt(index) ^ expected.charCodeAt(index);
-  }
-  return difference === 0;
-}
-
-async function signDeleteCapability(value: string, secret: string) {
-  const encoder = new TextEncoder();
-  const key = await crypto.subtle.importKey(
-    "raw",
-    encoder.encode(secret),
-    { name: "HMAC", hash: "SHA-256" },
-    false,
-    ["sign"],
-  );
-  const signature = new Uint8Array(
-    await crypto.subtle.sign("HMAC", key, encoder.encode(value)),
-  );
-  return Array.from(signature, (byte) => byte.toString(16).padStart(2, "0")).join("");
 }
 
 function normaliseStreamHost(value: string) {
@@ -172,10 +138,11 @@ async function isPlaybackAvailable(video: CloudflareVideo) {
 }
 
 function isEncodingComplete(video: CloudflareVideo) {
-  return Boolean(video.readyToStream) || (
-    video.status?.state === "ready" &&
-    Number(video.status.pctComplete ?? 0) >= 100
-  );
+  const progress = Number(video.status?.pctComplete);
+  if (Number.isFinite(progress)) {
+    return video.status?.state === "ready" && progress >= 100;
+  }
+  return Boolean(video.readyToStream);
 }
 
 export async function GET(request: Request) {
@@ -221,7 +188,6 @@ export async function GET(request: Request) {
       env.apiToken,
     );
 
-    const deleteSecret = authEnv().LOTUS_AUTH_SECRET?.trim() ?? "";
     const videos = await Promise.all(sourceVideos
       .filter((video) => video.uid)
       .map(async (video) => {
@@ -252,12 +218,23 @@ export async function GET(request: Request) {
           progress: video.status?.pctComplete ?? null,
           requiresSignedUrls: Boolean(video.requireSignedURLs),
           created: video.created ?? null,
-          deleteToken: username && deleteSecret
-            ? await createDeleteCapability(username, video.uid as string, deleteSecret)
-            : "",
+          canDelete: Boolean(username),
         };
       }));
     videos.sort((a, b) => (b.created ?? "").localeCompare(a.created ?? ""));
+
+    // A failed Stream upload can remain in Cloudflare after the original is
+    // uploaded again. Prefer the healthy copy with the same title so the
+    // training library never selects a known-broken duplicate.
+    const preferredByTitle = new Map<string, (typeof videos)[number]>();
+    for (const video of videos) {
+      const key = video.title.trim().toLowerCase();
+      const existing = preferredByTitle.get(key);
+      if (!existing || (video.ready && !video.deliveryError && existing.deliveryError)) {
+        preferredByTitle.set(key, video);
+      }
+    }
+    const preferredVideos = Array.from(preferredByTitle.values());
 
     const derivedStreamHost = videos
       .flatMap((video) => [video.thumbnail, sourceVideos.find((item) => item.uid === video.videoUid)?.playback?.hls ?? ""])
@@ -274,7 +251,7 @@ export async function GET(request: Request) {
     return NextResponse.json({
       connected: true,
       streamHost: normaliseStreamHost(env.customerSubdomain) || derivedStreamHost || "",
-      videos,
+      videos: preferredVideos,
       repairedPlaybackOrigins,
       refreshedAt: new Date().toISOString(),
     });
@@ -302,6 +279,14 @@ export async function DELETE(request: Request) {
     );
   }
 
+  const origin = request.headers.get("origin");
+  if (origin && origin !== new URL(request.url).origin) {
+    return NextResponse.json(
+      { error: "This delete request did not originate from Vivad SPARK." },
+      { status: 403 },
+    );
+  }
+
   let body: DeleteVideoRequest;
   try {
     body = await request.json() as DeleteVideoRequest;
@@ -313,15 +298,6 @@ export async function DELETE(request: Request) {
   if (!/^[a-f0-9]{32}$/i.test(uid)) {
     return NextResponse.json({ error: "The video ID is invalid." }, { status: 400 });
   }
-  const secret = authEnv().LOTUS_AUTH_SECRET?.trim() ?? "";
-  const token = typeof body.token === "string" ? body.token.trim() : "";
-  if (!secret || !await verifyDeleteCapability(username, uid, token, secret)) {
-    return NextResponse.json(
-      { error: "This delete request has expired. Refresh the training library and try again." },
-      { status: 403 },
-    );
-  }
-
   const env = getEnvironment();
   if (!env.accountId || !env.apiToken) {
     return NextResponse.json(

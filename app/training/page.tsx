@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import Hls from "hls.js";
 import { ChangeEvent, DragEvent, FormEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { MobileWorkspaceNavigation, navigationItem } from "../components/workspace-navigation";
 import { buildPersonSkillsPdf } from "./person-skills-pdf";
@@ -22,7 +23,7 @@ type Course = {
   source?: "stream" | "youtube";
   youtubeId?: string;
   created?: string | null;
-  deleteToken?: string;
+  canDelete?: boolean;
 };
 
 type StreamLibraryResponse = {
@@ -45,7 +46,7 @@ type StreamLibraryResponse = {
     deliveryError?: boolean;
     requiresSignedUrls: boolean;
     created?: string | null;
-    deleteToken?: string;
+    canDelete?: boolean;
   }>;
 };
 
@@ -95,14 +96,42 @@ type VideoCompletion = {
   updatedAt: string;
 };
 
-type StreamPlayer = {
-  addEventListener: (event: string, callback: () => void) => void;
-};
+function CloudflareStreamVideo({ src, title, onEnded }: { src: string; title: string; onEnded: () => void }) {
+  const videoRef = useRef<HTMLVideoElement>(null);
+  const [error, setError] = useState("");
 
-declare global {
-  interface Window {
-    Stream?: (iframe: HTMLIFrameElement) => StreamPlayer;
-  }
+  useEffect(() => {
+    const video = videoRef.current;
+    if (!video) return;
+
+    if (video.canPlayType("application/vnd.apple.mpegurl")) {
+      video.src = src;
+      return () => {
+        video.removeAttribute("src");
+        video.load();
+      };
+    }
+
+    if (!Hls.isSupported()) {
+      video.dispatchEvent(new Event("error"));
+      return;
+    }
+
+    const hls = new Hls({ enableWorker: true });
+    hls.loadSource(src);
+    hls.attachMedia(video);
+    hls.on(Hls.Events.ERROR, (_event, data) => {
+      if (data.fatal) setError("The video stream could not be loaded. Please try again.");
+    });
+    return () => hls.destroy();
+  }, [src]);
+
+  return (
+    <div className="training-stream-video">
+      <video ref={videoRef} controls playsInline preload="metadata" aria-label={title} onEnded={onEnded} onError={() => setError("The video stream could not be loaded. Please try again.")} />
+      {error && <p role="alert">{error}</p>}
+    </div>
+  );
 }
 
 const courses: Course[] = [
@@ -381,7 +410,6 @@ export default function TrainingPage() {
     customerCode: process.env.NEXT_PUBLIC_CLOUDFLARE_STREAM_CUSTOMER_CODE ?? "",
     videoIds: Object.fromEntries(courses.map((course) => [course.id, course.videoUid])),
   });
-  const playerRef = useRef<HTMLIFrameElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const selectedPersonIdRef = useRef("");
 
@@ -461,13 +489,6 @@ export default function TrainingPage() {
       }
     }
 
-    if (!document.querySelector('script[data-cloudflare-stream="true"]')) {
-      const script = document.createElement("script");
-      script.src = "https://embed.cloudflarestream.com/embed/sdk.latest.js";
-      script.async = true;
-      script.dataset.cloudflareStream = "true";
-      document.head.appendChild(script);
-    }
     if (new URLSearchParams(window.location.search).get("upload") === "1") {
       setUploadOpen(true);
     }
@@ -509,7 +530,7 @@ export default function TrainingPage() {
       deliveryError: video.deliveryError,
       requiresSignedUrls: video.requiresSignedUrls,
       created: video.created ?? null,
-      deleteToken: video.deleteToken,
+      canDelete: video.canDelete,
       source: "stream" as const,
     }));
     return [...streamCourses, ...youtubeCourses];
@@ -583,16 +604,6 @@ export default function TrainingPage() {
     const next = [...savedProgress, course.id];
     window.localStorage.setItem(personProgressKey(personId), JSON.stringify(next));
     if (selectedPersonIdRef.current === personId) setCompleted(next);
-  }
-
-  function connectPlayer() {
-    if (!playerRef.current || !window.Stream) return;
-    const player = window.Stream(playerRef.current);
-    player.addEventListener("ended", () => {
-      const personId = selectedPersonIdRef.current;
-      if (!personId) return;
-      void markComplete(activeCourse);
-    });
   }
 
   function chooseDepartment(value: string) {
@@ -878,7 +889,7 @@ export default function TrainingPage() {
         const response = await fetch("/api/training/videos", {
           method: "DELETE",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ uid: course.videoUid, token: course.deleteToken }),
+          body: JSON.stringify({ uid: course.videoUid }),
         });
         const payload = (await response.json().catch(() => ({}))) as { error?: string };
         if (!response.ok) {
@@ -967,14 +978,14 @@ export default function TrainingPage() {
                 allowFullScreen
               />
             ) : isConnected ? (
-              <iframe
+              <CloudflareStreamVideo
                 key={`${streamHost}-${activeUid}-${library.refreshedAt ?? "initial"}`}
-                ref={playerRef}
-                src={`https://${streamHost}/${activeUid}/iframe?primaryColor=%23478FE1&letterboxColor=%2353565A&preload=metadata`}
+                src={`https://${streamHost}/${activeUid}/manifest/video.m3u8`}
                 title={activeCourse.title}
-                allow="accelerometer; gyroscope; autoplay; encrypted-media; picture-in-picture"
-                allowFullScreen
-                onLoad={connectPlayer}
+                onEnded={() => {
+                  const personId = selectedPersonIdRef.current;
+                  if (personId) void markComplete(activeCourse, personId);
+                }}
               />
             ) : (
               <div className="training-player-empty">
@@ -1025,7 +1036,7 @@ export default function TrainingPage() {
                     <span className="training-play">▶</span>
                     <span className={connected ? "stream-state connected" : "stream-state"}>{course.youtubeId ? "YOUTUBE LINK" : course.requiresSignedUrls ? "SIGNED / LOCKED" : course.ready === false ? "PROCESSING" : connected ? "STREAM READY" : "ADD VIDEO"}</span>
                   </button>
-                  {(course.source === "youtube" || (course.source === "stream" && course.deleteToken)) && (
+                  {(course.source === "youtube" || course.source === "stream") && (
                     <button
                       className="training-delete-video"
                       type="button"
