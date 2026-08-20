@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   MobileWorkspaceNavigation,
   workspaceNavigationItems,
@@ -145,6 +145,31 @@ export default function VivaDocsPage() {
   const [runCandidateId, setRunCandidateId] = useState("signed-in-user");
   const [runPickerLoading, setRunPickerLoading] = useState(false);
   const [toast, setToast] = useState("");
+  const librarySearchRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const requestedView = params.get("view");
+    const viewByRoute: Record<string, View> = {
+      library: "SOP library",
+      skills: "Skills matrix",
+      approvals: "Approvals",
+      operator: "Operator mode",
+      audit: "Audit log",
+    };
+    const viewTimeout = window.setTimeout(() => {
+      if (requestedView && viewByRoute[requestedView]) {
+        setView(viewByRoute[requestedView]);
+      }
+    }, 0);
+    const focusTimeout = requestedView === "library" && params.get("focus") === "search"
+      ? window.setTimeout(() => librarySearchRef.current?.focus(), 75)
+      : undefined;
+    return () => {
+      window.clearTimeout(viewTimeout);
+      if (focusTimeout) window.clearTimeout(focusTimeout);
+    };
+  }, []);
 
   useEffect(() => {
     const saved = window.localStorage.getItem(STORAGE_KEY);
@@ -683,6 +708,7 @@ export default function VivaDocsPage() {
               <label>
                 <span>⌕</span>
                 <input
+                  ref={librarySearchRef}
                   aria-label="Search SOPs"
                   placeholder="Search title, reference, owner or category"
                   value={query}

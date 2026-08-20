@@ -42,6 +42,42 @@ test("requires the shared Apps Script login before rendering Vivad SPARK", async
   assert.match(html, /autocomplete="current-password"/i);
 });
 
+test("landing dashboard uses live metrics and accessible workspace destinations", async () => {
+  const [page, css, vivadocs, training] = await Promise.all([
+    readFile(new URL("../app/page.tsx", import.meta.url), "utf8"),
+    readFile(new URL("../app/globals.css", import.meta.url), "utf8"),
+    readFile(new URL("../app/vivadocs/page.tsx", import.meta.url), "utf8"),
+    readFile(new URL("../app/training/page.tsx", import.meta.url), "utf8"),
+  ]);
+
+  assert.match(page, /Where would you like to go\?/);
+  assert.match(page, /href: "\/quality"/);
+  assert.match(page, /href: "\/vivadocs\?view=skills"/);
+  assert.match(page, /href: "\/vivadocs\?view=library"/);
+  assert.match(page, /href: "\/training"/);
+  assert.match(page, /Promise\.allSettled/);
+  assert.match(page, /\/api\/auth\/session/);
+  assert.match(page, /\/api\/non-conformance/);
+  assert.match(page, /\/api\/vivadocs\/skills/);
+  assert.match(page, /\/api\/vivadocs\/sops/);
+  assert.match(page, /\/api\/training\/videos/);
+  assert.match(page, /record\.status === "Competent" \|\| record\.status === "Trainer"/);
+  assert.match(page, /sop\.status === "Published"/);
+  assert.match(page, /event\.action\?\.trim\(\) && event\.status !== "Completed"/);
+  assert.match(page, /7 \* 24 \* 60 \* 60 \* 1000/);
+  assert.match(page, /role="status"/);
+  assert.match(page, /metric\.value \?\? "—"/);
+  assert.doesNotMatch(page, /Report a quality event/);
+  assert.doesNotMatch(page, /Recently viewed/);
+  assert.match(vivadocs, /librarySearchRef/);
+  assert.match(vivadocs, /requestedView === "library"/);
+  assert.match(training, /get\("upload"\) === "1"/);
+  assert.match(css, /\.portal-destinations/);
+  assert.match(css, /\.portal-destination:focus-visible/);
+  assert.match(css, /@media \(prefers-reduced-motion: reduce\)/);
+  assert.match(css, /@media \(max-width: 700px\)/);
+});
+
 test("includes the live Non-Conformance Event workspace", async () => {
   const [page, route, css] = await Promise.all([
     readFile(new URL("../app/quality/page.tsx", import.meta.url), "utf8"),

@@ -15,8 +15,8 @@ export async function generateMetadata(): Promise<Metadata> {
   const host = requestHeaders.get("x-forwarded-host") ?? requestHeaders.get("host");
   const protocol = requestHeaders.get("x-forwarded-proto") ?? "https";
   const origin = host ? `${protocol}://${host}` : "http://localhost:3000";
-  const title = "Hoshin — Turn Strategy Into Action";
-  const description = "Hoshin Kanri strategy deployment for measurable outcomes, accountable owners, and a review rhythm that keeps teams moving.";
+  const title = "Vivad SPARK — Quality, Training and Controlled Work";
+  const description = "Access Vivad quality systems, training records, controlled procedures and learning videos in one place.";
 
   return {
     metadataBase: new URL(origin),

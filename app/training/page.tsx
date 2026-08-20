@@ -468,6 +468,9 @@ export default function TrainingPage() {
       script.dataset.cloudflareStream = "true";
       document.head.appendChild(script);
     }
+    if (new URLSearchParams(window.location.search).get("upload") === "1") {
+      setUploadOpen(true);
+    }
   }, []);
 
   useEffect(() => {
