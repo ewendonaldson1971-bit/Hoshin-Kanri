@@ -424,7 +424,7 @@ test("mobile workspace drawer covers routes, state and accessible closing behavi
   assert.match(navigation, /href: "\/lets-problem-solve"/);
   assert.match(problemSolve, /activeItem="lets-problem-solve"/);
   assert.match(problemSolve, /CONTINUOUS IMPROVEMENT/);
-  assert.match(problemSolve, /Problem-solving tools and workflows will be added here\./);
+  assert.match(problemSolve, /ProblemSolvingWorkflow/);
   assert.match(quality, /<Link href="\/lets-problem-solve">Let’s Problem Solve/);
   assert.match(qualitySidebar, /^"use client";/);
   assert.ok(qualitySidebar.indexOf("Event log") < qualitySidebar.indexOf("problemSolveItem.label"));

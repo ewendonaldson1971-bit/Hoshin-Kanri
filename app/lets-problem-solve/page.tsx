@@ -1,5 +1,6 @@
 import { MobileWorkspaceNavigation } from "../components/workspace-navigation";
 import { QualityWorkspaceSidebar } from "../components/quality-workspace-sidebar";
+import { ProblemSolvingWorkflow } from "./problem-solving-workflow";
 
 export default function LetsProblemSolvePage() {
   return (
@@ -16,10 +17,7 @@ export default function LetsProblemSolvePage() {
           </div>
         </header>
 
-        <section className="problem-solve-placeholder" aria-labelledby="problem-solve-placeholder-title">
-          <span aria-hidden="true">◎</span>
-          <h2 id="problem-solve-placeholder-title">Problem-solving tools and workflows will be added here.</h2>
-        </section>
+        <ProblemSolvingWorkflow />
       </main>
     </div>
   );
