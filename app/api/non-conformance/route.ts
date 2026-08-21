@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { qualityEventJobNumber } from "../../../lib/quality-event-reference";
 
 const SHEET_ID = "1aKVB1RjaQSoEW9yw14YJ2asSrsSwDDR3EB2KnSfPRMc";
 const SHEET_GID = "407617143";
@@ -113,26 +114,30 @@ export async function GET() {
     const [, ...dataRows] = parseCsv(csv);
     const events = dataRows
       .filter((row) => row.some((cell) => clean(cell)))
-      .map((row, index) => ({
-        id: `${clean(row[5]) || "NCE"}-${index + 1}`,
-        status: normaliseStatus(row[0]),
-        progression: clean(row[1]),
-        category: normaliseCategory(row[2]),
-        origin: normaliseOrigin(row[3]),
-        date: parseDate(row[4]),
-        dateLabel: clean(row[4]) || "Date not recorded",
-        jobNumber: clean(row[5]) || "—",
-        department: clean(row[6]) || "Unclassified",
-        reportedBy: clean(row[7]) || "Unassigned",
-        assignedTo: clean(row[8]) || "Unassigned",
-        description: clean(row[9]) || "No description recorded",
-        severity: Number.parseInt(clean(row[10]), 10) || null,
-        rootCause: clean(row[11]),
-        action: clean(row[12]),
-        remediationCost: clean(row[13]),
-        sopOutcome: clean(row[14]),
-        processed: clean(row[15]),
-      }));
+      .map((row, index) => {
+        const sourceRowNumber = index + 2;
+        const jobNumber = qualityEventJobNumber(row[5], row[4], sourceRowNumber);
+        return {
+          id: `${jobNumber}-${sourceRowNumber}`,
+          status: normaliseStatus(row[0]),
+          progression: clean(row[1]),
+          category: normaliseCategory(row[2]),
+          origin: normaliseOrigin(row[3]),
+          date: parseDate(row[4]),
+          dateLabel: clean(row[4]) || "Date not recorded",
+          jobNumber,
+          department: clean(row[6]) || "Unclassified",
+          reportedBy: clean(row[7]) || "Unassigned",
+          assignedTo: clean(row[8]) || "Unassigned",
+          description: clean(row[9]) || "No description recorded",
+          severity: Number.parseInt(clean(row[10]), 10) || null,
+          rootCause: clean(row[11]),
+          action: clean(row[12]),
+          remediationCost: clean(row[13]),
+          sopOutcome: clean(row[14]),
+          processed: clean(row[15]),
+        };
+      });
 
     return NextResponse.json({
       events,
