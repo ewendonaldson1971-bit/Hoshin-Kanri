@@ -16,6 +16,7 @@ type Course = {
   owner: string;
   accent: "blue" | "green" | "red" | "amber";
   videoUid: string;
+  playbackUrl?: string;
   thumbnail?: string;
   ready?: boolean;
   deliveryError?: boolean;
@@ -35,6 +36,7 @@ type StreamLibraryResponse = {
   videos: Array<{
     id: string;
     videoUid: string;
+    playbackUrl: string;
     title: string;
     description: string;
     category: string;
@@ -95,6 +97,12 @@ type VideoCompletion = {
   completedAt: string;
   updatedAt: string;
 };
+
+class TrainingDeleteError extends Error {
+  constructor(message: string, readonly status: number) {
+    super(message);
+  }
+}
 
 function CloudflareStreamVideo({ src, title, onEnded }: { src: string; title: string; onEnded: () => void }) {
   const videoRef = useRef<HTMLVideoElement>(null);
@@ -368,14 +376,6 @@ function formatDuration(seconds: number) {
   return `${minutes} min`;
 }
 
-function manualStreamHost(customerCode: string) {
-  const cleaned = customerCode.replace(/^https?:\/\//i, "").replace(/\/.*$/, "");
-  if (!cleaned) return "";
-  if (cleaned.endsWith(".cloudflarestream.com")) return cleaned;
-  if (cleaned.startsWith("customer-")) return `${cleaned}.cloudflarestream.com`;
-  return `customer-${cleaned}.cloudflarestream.com`;
-}
-
 export default function TrainingPage() {
   const [activeId, setActiveId] = useState(courses[0].id);
   const [query, setQuery] = useState("");
@@ -406,17 +406,21 @@ export default function TrainingPage() {
   const [libraryLoading, setLibraryLoading] = useState(true);
   const [deletingId, setDeletingId] = useState("");
   const [deleteNotice, setDeleteNotice] = useState<{ message: string; error: boolean } | null>(null);
+  const [reauthCourse, setReauthCourse] = useState<Course | null>(null);
+  const [reauthBusy, setReauthBusy] = useState(false);
+  const [reauthError, setReauthError] = useState("");
   const [config, setConfig] = useState<StreamConfig>({
     customerCode: process.env.NEXT_PUBLIC_CLOUDFLARE_STREAM_CUSTOMER_CODE ?? "",
     videoIds: Object.fromEntries(courses.map((course) => [course.id, course.videoUid])),
   });
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const reauthUsernameRef = useRef<HTMLInputElement>(null);
   const selectedPersonIdRef = useRef("");
 
   const refreshLibrary = useCallback(async () => {
     setLibraryLoading(true);
     try {
-      const response = await fetch("/api/training/videos", { cache: "no-store" });
+      const response = await fetch("/api/training/videos", { cache: "no-store", credentials: "include" });
       const payload = (await response.json()) as StreamLibraryResponse;
       setLibrary(payload);
       if (payload.connected && payload.videos.length) {
@@ -512,6 +516,16 @@ export default function TrainingPage() {
     void refreshPeople();
   }, [refreshPeople]);
 
+  useEffect(() => {
+    if (!reauthCourse) return;
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    window.requestAnimationFrame(() => reauthUsernameRef.current?.focus());
+    return () => {
+      document.body.style.overflow = previousOverflow;
+    };
+  }, [reauthCourse]);
+
   const libraryCourses = useMemo<Course[]>(() => {
     if (!library.connected || !library.videos.length) return [...courses, ...youtubeCourses];
     const accents: Course["accent"][] = ["blue", "green", "red", "amber"];
@@ -525,6 +539,7 @@ export default function TrainingPage() {
       owner: video.owner,
       accent: accents[index % accents.length],
       videoUid: video.videoUid,
+      playbackUrl: video.playbackUrl,
       thumbnail: video.thumbnail,
       ready: video.ready,
       deliveryError: video.deliveryError,
@@ -558,11 +573,10 @@ export default function TrainingPage() {
   const activeCourse = libraryCourses.find((course) => course.id === activeId) ?? libraryCourses[0];
   const activeUid = activeCourse.videoUid || config.videoIds[activeCourse.id];
   const isYoutube = Boolean(activeCourse.youtubeId);
-  const streamHost = library.streamHost || manualStreamHost(config.customerCode);
   const isProtected = Boolean(activeCourse.requiresSignedUrls);
   const isReady = activeCourse.ready !== false;
   const hasDeliveryError = Boolean(activeCourse.deliveryError);
-  const isConnected = Boolean(!isYoutube && streamHost && activeUid?.trim() && isReady && !isProtected);
+  const isConnected = Boolean(!isYoutube && activeCourse.playbackUrl && activeUid?.trim() && isReady && !hasDeliveryError && !isProtected);
   const completionRate = libraryCourses.length ? Math.round((completed.filter((id) => libraryCourses.some((course) => course.id === id)).length / libraryCourses.length) * 100) : 0;
   const selectedPerson = people.find((person) => person.id === selectedPersonId);
   const departmentPeople = people.filter((person) => person.department === selectedDepartment);
@@ -870,11 +884,13 @@ export default function TrainingPage() {
     setUploadOpen(true);
   }
 
-  async function deleteCourse(course: Course) {
-    const confirmed = window.confirm(
-      `Permanently delete “${course.title}” from the training library? This cannot be undone.`,
-    );
-    if (!confirmed) return;
+  async function deleteCourse(course: Course, alreadyConfirmed = false) {
+    if (!alreadyConfirmed) {
+      const confirmed = window.confirm(
+        `Permanently delete “${course.title}” from the training library? This cannot be undone.`,
+      );
+      if (!confirmed) return;
+    }
 
     setDeletingId(course.id);
     setDeleteNotice(null);
@@ -888,12 +904,21 @@ export default function TrainingPage() {
       } else if (course.source === "stream") {
         const response = await fetch("/api/training/videos", {
           method: "DELETE",
+          credentials: "include",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ uid: course.videoUid }),
         });
         const payload = (await response.json().catch(() => ({}))) as { error?: string };
         if (!response.ok) {
-          throw new Error(payload.error || "The training video could not be deleted.");
+          if (response.status === 401) {
+            setReauthError("");
+            setReauthCourse(course);
+            return;
+          }
+          if (response.status === 403) {
+            throw new TrainingDeleteError(payload.error || "Your account does not have permission to delete training videos.", 403);
+          }
+          throw new TrainingDeleteError(payload.error || `The training video could not be deleted (${response.status}).`, response.status);
         }
         setLibrary((current) => ({
           ...current,
@@ -928,6 +953,50 @@ export default function TrainingPage() {
       });
     } finally {
       setDeletingId("");
+    }
+  }
+
+  function closeReauthentication() {
+    if (reauthBusy) return;
+    setReauthCourse(null);
+    setReauthError("");
+  }
+
+  async function reauthenticateForDeletion(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!reauthCourse || reauthBusy) return;
+
+    const course = reauthCourse;
+    const form = new FormData(event.currentTarget);
+    form.set("return_to", "/training");
+    setReauthBusy(true);
+    setReauthError("");
+
+    try {
+      const response = await fetch("/hoshin-login?return_to=%2Ftraining", {
+        method: "POST",
+        credentials: "include",
+        body: form,
+        redirect: "follow",
+      });
+      const responsePath = new URL(response.url, window.location.origin).pathname;
+      if (!response.ok || responsePath === "/hoshin-login") {
+        setReauthError(
+          response.status === 403
+            ? "This account is not enabled to access Vivad SPARK."
+            : response.status === 503
+              ? "Sign in is temporarily unavailable. Please try again shortly."
+              : "The user name or password was not accepted. Please try again.",
+        );
+        return;
+      }
+
+      setReauthCourse(null);
+      await deleteCourse(course, true);
+    } catch {
+      setReauthError("Sign in could not be completed. Check your connection and try again.");
+    } finally {
+      setReauthBusy(false);
     }
   }
 
@@ -979,8 +1048,8 @@ export default function TrainingPage() {
               />
             ) : isConnected ? (
               <CloudflareStreamVideo
-                key={`${streamHost}-${activeUid}-${library.refreshedAt ?? "initial"}`}
-                src={`https://${streamHost}/${activeUid}/manifest/video.m3u8`}
+                key={`${activeCourse.playbackUrl}-${activeUid}-${library.refreshedAt ?? "initial"}`}
+                src={activeCourse.playbackUrl as string}
                 title={activeCourse.title}
                 onEnded={() => {
                   const personId = selectedPersonIdRef.current;
@@ -1022,19 +1091,19 @@ export default function TrainingPage() {
           </div>
           {deleteNotice && (
             <div className={deleteNotice.error ? "training-delete-notice error" : "training-delete-notice"} role={deleteNotice.error ? "alert" : "status"}>
-              {deleteNotice.message}
+              <span>{deleteNotice.message}</span>
             </div>
           )}
           <div className="training-grid">
             {filteredCourses.map((course, index) => {
-              const connected = Boolean(course.youtubeId || (streamHost && (config.videoIds[course.id] || course.videoUid) && course.ready !== false && !course.requiresSignedUrls));
+              const connected = Boolean(course.youtubeId || (course.playbackUrl && (config.videoIds[course.id] || course.videoUid) && course.ready === true && !course.deliveryError && !course.requiresSignedUrls));
               const done = completed.includes(course.id);
               return (
                 <article className={activeId === course.id ? "training-card active" : "training-card"} key={course.id}>
                   <button className={`training-card-visual ${course.accent} ${course.thumbnail ? "has-thumbnail" : ""}`} style={course.thumbnail ? { backgroundImage: `linear-gradient(rgba(26,30,35,.12), rgba(26,30,35,.42)), url(${course.thumbnail})` } : undefined} type="button" onClick={() => { setActiveId(course.id); window.scrollTo({ top: 0, behavior: "smooth" }); }} aria-label={`Open ${course.title}`}>
                     <span className="training-card-number">{String(index + 1).padStart(2, "0")}</span>
                     <span className="training-play">▶</span>
-                    <span className={connected ? "stream-state connected" : "stream-state"}>{course.youtubeId ? "YOUTUBE LINK" : course.requiresSignedUrls ? "SIGNED / LOCKED" : course.ready === false ? "PROCESSING" : connected ? "STREAM READY" : "ADD VIDEO"}</span>
+                    <span className={connected ? "stream-state connected" : "stream-state"}>{course.youtubeId ? "YOUTUBE LINK" : course.requiresSignedUrls ? "SIGNED / LOCKED" : course.deliveryError ? "PLAYBACK ERROR" : course.ready === false ? "PROCESSING" : connected ? "STREAM READY" : "ADD VIDEO"}</span>
                   </button>
                   {(course.source === "youtube" || course.source === "stream") && (
                     <button
@@ -1067,6 +1136,54 @@ export default function TrainingPage() {
           {!filteredCourses.length && <div className="training-empty"><strong>No training matches your search.</strong><button type="button" onClick={() => { setQuery(""); setCategory("All topics"); }}>Clear filters</button></div>}
         </section>
       </main>
+
+      {reauthCourse && (
+        <div
+          className="stream-modal-backdrop"
+          role="presentation"
+          onMouseDown={(event) => event.target === event.currentTarget && closeReauthentication()}
+        >
+          <form
+            className="stream-modal training-reauth-modal"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="training-reauth-title"
+            aria-describedby="training-reauth-description"
+            onSubmit={reauthenticateForDeletion}
+            onMouseDown={(event) => event.stopPropagation()}
+            onKeyDown={(event) => {
+              if (event.key === "Escape") closeReauthentication();
+            }}
+          >
+            <div className="stream-modal-head">
+              <div>
+                <span className="training-eyebrow">SECURE VIDEO DELETION</span>
+                <h2 id="training-reauth-title">Sign in to continue</h2>
+              </div>
+              <button type="button" disabled={reauthBusy} onClick={closeReauthentication} aria-label="Close sign-in dialog">×</button>
+            </div>
+            <p id="training-reauth-description">
+              Your session has expired. Sign in again to delete “{reauthCourse.title}”. The video will be deleted automatically after your identity and permission are confirmed.
+            </p>
+            <input type="hidden" name="return_to" value="/training" />
+            <div className="training-reauth-fields">
+              <label>
+                <span>User name</span>
+                <input ref={reauthUsernameRef} name="username" type="text" autoComplete="username" required disabled={reauthBusy} />
+              </label>
+              <label>
+                <span>Password</span>
+                <input name="password" type="password" autoComplete="current-password" required disabled={reauthBusy} />
+              </label>
+            </div>
+            {reauthError && <div className="training-reauth-error" role="alert">{reauthError}</div>}
+            <div className="training-reauth-actions">
+              <button className="secondary" type="button" disabled={reauthBusy} onClick={closeReauthentication}>Cancel</button>
+              <button type="submit" disabled={reauthBusy}>{reauthBusy ? "Signing in…" : "Sign in and delete video"}</button>
+            </div>
+          </form>
+        </div>
+      )}
 
       {configOpen && (
         <div className="stream-modal-backdrop" role="presentation" onMouseDown={() => setConfigOpen(false)}>

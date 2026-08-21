@@ -111,11 +111,10 @@ test("includes the Cloudflare Stream training academy", async () => {
   ]);
 
   assert.match(page, /Training Academy/);
-  assert.match(page, /cloudflarestream\.com/);
   assert.match(page, /signed URLs/);
   assert.match(page, /import Hls from "hls\.js"/);
   assert.match(page, /new Hls\(\{ enableWorker: true \}\)/);
-  assert.match(page, /\/manifest\/video\.m3u8/);
+  assert.match(page, /src=\{activeCourse\.playbackUrl as string\}/);
   assert.match(page, /onEnded=\{onEnded\}/);
   assert.doesNotMatch(page, /embed\.cloudflarestream\.com\/embed\/sdk/);
   assert.match(page, /\/api\/training\/videos/);
@@ -130,7 +129,8 @@ test("includes the Cloudflare Stream training academy", async () => {
   assert.match(route, /progress >= 100/);
   assert.match(route, /method: "GET"/);
   assert.match(route, /Range: "bytes=0-1023"/);
-  assert.match(route, /ready: isEncodingComplete\(video\)/);
+  assert.match(route, /ready: Boolean\(isEncodingComplete\(video\) && video\.playback\?\.hls && video\.deliveryReady\)/);
+  assert.match(route, /playbackUrl: video\.playback\?\.hls/);
   assert.match(route, /deliveryError/);
   assert.match(route, /allowedOrigins/);
   assert.match(route, /vivadspark\.netlify\.app/);
@@ -141,6 +141,17 @@ test("includes the Cloudflare Stream training academy", async () => {
   assert.match(page, /Permanently delete/);
   assert.match(page, /aria-label=\{`Delete \$\{course\.title\}`\}/);
   assert.match(page, /method: "DELETE"/);
+  assert.match(page, /credentials: "include"/);
+  assert.match(page, /response\.status === 401/);
+  assert.match(page, /response\.status === 403/);
+  assert.match(page, /setReauthCourse\(course\)/);
+  assert.match(page, /role="dialog"/);
+  assert.match(page, /aria-modal="true"/);
+  assert.match(page, /Sign in and delete video/);
+  assert.match(page, /autoComplete="current-password"/);
+  assert.match(page, /fetch\("\/hoshin-login\?return_to=%2Ftraining"/);
+  assert.match(page, /deleteCourse\(course, true\)/);
+  assert.match(page, /document\.body\.style\.overflow = "hidden"/);
   assert.match(page, /window\.localStorage\.setItem\(youtubeKey/);
   assert.match(page, /training-delete-notice/);
   assert.match(page, /fetch\("\/api\/vivadocs\/skills"/);
@@ -152,8 +163,9 @@ test("includes the Cloudflare Stream training academy", async () => {
   assert.match(page, /selectedPersonIdRef\.current/);
   assert.match(page, /disabled=\{!selectedPersonId \|\| completingId/);
   assert.match(route, /export async function DELETE\(request: Request\)/);
-  assert.match(route, /getHoshinSessionUsername/);
-  assert.match(route, /canDelete: Boolean\(username\)/);
+  assert.match(route, /getHoshinRequestUsername/);
+  assert.match(route, /trainingVideoDeleteAccess/);
+  assert.match(route, /canDelete: canDeleteTrainingVideos\(username\)/);
   assert.match(route, /request\.headers\.get\("origin"\)/);
   assert.match(route, /preferredByTitle/);
   assert.match(route, /video\.ready && !video\.deliveryError/);
@@ -163,6 +175,10 @@ test("includes the Cloudflare Stream training academy", async () => {
   assert.match(route, /method: "DELETE"/);
   assert.match(route, /export async function DELETE[\s\S]*payload\.success === false/);
   assert.match(page, /videos: current\.videos\.filter/);
+  assert.ok(
+    page.indexOf("if (!response.ok)") < page.indexOf("videos: current.videos.filter"),
+    "the UI must not remove a card until deletion succeeds",
+  );
   assert.match(page, /window\.setTimeout\(\(\) => void refreshLibrary\(\), 1500\)/);
   assert.match(route, /deletedBy: username/);
   assert.doesNotMatch(route, /NextResponse\.json\([^)]*apiToken/);
@@ -170,11 +186,16 @@ test("includes the Cloudflare Stream training academy", async () => {
   assert.match(envExample, /CLOUDFLARE_STREAM_CUSTOMER_SUBDOMAIN=/);
   assert.match(envExample, /NEXT_PUBLIC_CLOUDFLARE_STREAM_CUSTOMER_CODE=/);
   assert.match(envExample, /CLOUDFLARE_STREAM_ALLOWED_ORIGINS=vivadspark\.netlify\.app/);
+  assert.match(envExample, /TRAINING_VIDEO_DELETE_USERS=/);
+  assert.match(page, /PLAYBACK ERROR/);
+  assert.match(page, /course\.ready === true && !course\.deliveryError/);
   assert.match(css, /\.training-player iframe/);
   assert.match(css, /\.training-stream-video video/);
   assert.match(css, /\.stream-modal/);
   assert.match(css, /\.training-delete-video/);
   assert.match(css, /\.training-delete-notice/);
+  assert.match(css, /\.training-reauth-modal/);
+  assert.match(css, /\.training-reauth-error/);
   assert.match(css, /\.training-progress-person/);
   assert.match(css, /\.training-mobile-progress/);
 });

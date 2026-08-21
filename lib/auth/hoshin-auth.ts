@@ -42,6 +42,44 @@ export async function getHoshinSessionUsername(cookieHeader: string, env: Hoshin
   return base64UrlDecode(usernameRaw);
 }
 
+export async function getHoshinRequestUsername(request: Request) {
+  return getHoshinSessionUsername(request.headers.get("cookie") ?? "", authEnv());
+}
+
+export function canDeleteTrainingVideos(
+  username: string,
+  configuredUsers = process.env.TRAINING_VIDEO_DELETE_USERS,
+) {
+  return trainingVideoDeleteAccess(username, configuredUsers).allowed;
+}
+
+export function trainingVideoDeleteAccess(
+  username: string,
+  configuredUsers = process.env.TRAINING_VIDEO_DELETE_USERS,
+) {
+  if (!username) {
+    return {
+      allowed: false as const,
+      status: 401 as const,
+      error: "Sign in is required to delete a training video.",
+    };
+  }
+  const allowedUsers = configuredUsers
+    ?.split(",")
+    .map((value) => value.trim().toLowerCase())
+    .filter(Boolean) ?? [];
+  // Lotus access is the existing application permission. Deployments can
+  // narrow deletion further with a server-side username allowlist.
+  if (allowedUsers.length === 0 || allowedUsers.includes(username.trim().toLowerCase())) {
+    return { allowed: true as const, status: 200 as const, error: "" };
+  }
+  return {
+    allowed: false as const,
+    status: 403 as const,
+    error: "Your account does not have permission to delete training videos.",
+  };
+}
+
 export async function authenticateWithLotus(username: string, password: string, env: HoshinAuthEnv) {
   const serviceUrl = env.LOTUS_AUTH_SERVICE_URL?.trim() || DEFAULT_AUTH_SERVICE_URL;
   try {

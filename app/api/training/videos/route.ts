@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { authEnv, getHoshinSessionUsername } from "../../../../lib/auth/hoshin-auth";
+import { canDeleteTrainingVideos, getHoshinRequestUsername, trainingVideoDeleteAccess } from "../../../../lib/auth/hoshin-auth";
 
 type CloudflareVideo = {
   uid?: string;
@@ -147,10 +147,7 @@ function isEncodingComplete(video: CloudflareVideo) {
 
 export async function GET(request: Request) {
   const env = getEnvironment();
-  const username = await getHoshinSessionUsername(
-    request.headers.get("cookie") ?? "",
-    authEnv(),
-  );
+  const username = await getHoshinRequestUsername(request);
   const missing = [
     !env.accountId && "CLOUDFLARE_ACCOUNT_ID",
     !env.apiToken && "CLOUDFLARE_STREAM_API_TOKEN",
@@ -207,18 +204,19 @@ export async function GET(request: Request) {
           owner: textMeta(video.meta, "owner") || "Vivad",
           durationSeconds: Math.max(0, Math.round(video.duration ?? 0)),
           thumbnail: video.thumbnail ?? "",
-          // Cloudflare's readyToStream/status fields are authoritative. A
-          // transient delivery probe failure is reported separately but does
-          // not prevent the browser player from attempting playback.
-          ready: isEncodingComplete(video),
-          deliveryError: Boolean(isEncodingComplete(video) && !video.deliveryReady),
-          status: isEncodingComplete(video) && !video.deliveryReady
+          playbackUrl: video.playback?.hls ?? "",
+          // Encoding completion alone is insufficient: a usable HLS URL must
+          // exist and respond successfully before the UI calls a video ready.
+          ready: Boolean(isEncodingComplete(video) && video.playback?.hls && video.deliveryReady),
+          providerReady: isEncodingComplete(video),
+          deliveryError: Boolean(isEncodingComplete(video) && (!video.playback?.hls || !video.deliveryReady)),
+          status: isEncodingComplete(video) && (!video.playback?.hls || !video.deliveryReady)
             ? "delivery-error"
             : video.status?.state ?? "unknown",
           progress: video.status?.pctComplete ?? null,
           requiresSignedUrls: Boolean(video.requireSignedURLs),
           created: video.created ?? null,
-          canDelete: Boolean(username),
+          canDelete: canDeleteTrainingVideos(username),
         };
       }));
     videos.sort((a, b) => (b.created ?? "").localeCompare(a.created ?? ""));
@@ -268,14 +266,15 @@ export async function GET(request: Request) {
 }
 
 export async function DELETE(request: Request) {
-  const username = await getHoshinSessionUsername(
-    request.headers.get("cookie") ?? "",
-    authEnv(),
-  );
-  if (!username) {
+  const username = await getHoshinRequestUsername(request);
+  const access = trainingVideoDeleteAccess(username);
+  if (!access.allowed) {
+    console.warn("Training video deletion denied", {
+      reason: access.status === 401 ? "missing-or-expired-session" : "insufficient-permission",
+    });
     return NextResponse.json(
-      { error: "Sign in is required to delete a training video." },
-      { status: 401 },
+      { error: access.error },
+      { status: access.status },
     );
   }
 

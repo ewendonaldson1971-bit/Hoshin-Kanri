@@ -1391,7 +1391,7 @@ select:focus, input:focus { border-color: var(--blue); box-shadow: 0 0 0 3px rgb
 .training-delete-video:hover, .training-delete-video:focus-visible { border-color: #df3150; background: #fff1f3; outline: 3px solid rgba(223,49,80,.23); outline-offset: 2px; transform: translateY(-1px); }
 .training-delete-video:disabled { cursor: wait; opacity: .7; }
 .training-delete-spinner { width: 17px; height: 17px; border: 2px solid rgba(181,22,50,.22); border-top-color: #b51632; border-radius: 50%; animation: spin .7s linear infinite; }
-.training-delete-notice { margin: -8px 0 16px; padding: 10px 13px; border: 1px solid #b9df9f; border-radius: 7px; background: #f1faeb; color: #3d7424; font-size: 10px; font-weight: 700; }
+.training-delete-notice { display: flex; align-items: center; gap: 12px; margin: -8px 0 16px; padding: 10px 13px; border: 1px solid #b9df9f; border-radius: 7px; background: #f1faeb; color: #3d7424; font-size: 10px; font-weight: 700; }
 .training-delete-notice.error { border-color: #f0bec7; background: #fff1f3; color: #a7102c; }
 .training-empty { min-height: 180px; display: grid; place-items: center; align-content: center; gap: 8px; border: 1px dashed #cdd0d4; border-radius: 8px; background: #fff; color: #777b82; }
 .training-empty button { border: 0; background: transparent; color: var(--blue); font-size: 10px; font-weight: 700; }
@@ -1413,6 +1413,15 @@ select:focus, input:focus { border-color: var(--blue); box-shadow: 0 0 0 3px rgb
 .stream-modal-actions { display: flex; align-items: center; justify-content: space-between; gap: 20px; margin-top: 22px; padding-top: 20px; border-top: 1px solid var(--line); }
 .stream-modal-actions a { color: var(--blue); font-size: 9px; font-weight: 700; text-decoration: none; }
 .stream-modal-actions button { min-height: 40px; padding: 0 20px; border: 0; border-radius: 99px; background: var(--blue); color: #fff; font-size: 10px; font-weight: 700; }
+.training-reauth-modal { width: min(480px, 96vw); }
+.training-reauth-fields { display: grid; gap: 13px; }
+.training-reauth-modal input:focus-visible { border-color: var(--blue); box-shadow: 0 0 0 3px rgba(71,143,225,.2); }
+.training-reauth-error { margin-top: 15px; padding: 11px 13px; border: 1px solid #f0bec7; border-radius: 7px; background: #fff1f3; color: #a7102c; font-size: 10px; font-weight: 700; line-height: 1.45; }
+.training-reauth-actions { display: flex; justify-content: flex-end; gap: 10px; margin-top: 22px; padding-top: 20px; border-top: 1px solid var(--line); }
+.training-reauth-actions button { min-height: 42px; padding: 0 20px; border: 0; border-radius: 99px; background: var(--blue); color: #fff; font-size: 10px; font-weight: 700; cursor: pointer; }
+.training-reauth-actions button.secondary { border: 1px solid var(--line); background: #fff; color: var(--grey); }
+.training-reauth-actions button:hover:not(:disabled), .training-reauth-actions button:focus-visible { outline: 3px solid rgba(71,143,225,.22); outline-offset: 2px; }
+.training-reauth-actions button:disabled { cursor: wait; opacity: .62; }
 .training-upload-modal { width: min(760px, 96vw); }
 .training-source-tabs { display: inline-flex; gap: 5px; margin: 17px 0 0; padding: 4px; border-radius: 99px; background: #f0f2f5; }
 .training-source-tabs button { min-height: 35px; padding: 0 15px; border: 0; border-radius: 99px; background: transparent; color: #777b82; font-size: 9px; font-weight: 700; }
