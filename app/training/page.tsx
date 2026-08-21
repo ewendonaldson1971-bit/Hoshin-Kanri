@@ -964,7 +964,7 @@ export default function TrainingPage() {
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ uid: course.videoUid }),
         });
-        const payload = (await response.json().catch(() => ({}))) as { error?: string };
+        const payload = (await response.json().catch(() => ({}))) as { error?: string; deletedUids?: string[] };
         if (!response.ok) {
           if (response.status === 401) {
             setReauthError("");
@@ -976,12 +976,12 @@ export default function TrainingPage() {
           }
           throw new TrainingDeleteError(payload.error || `The training video could not be deleted (${response.status}).`, response.status);
         }
+        const deletedUids = new Set(payload.deletedUids?.length ? payload.deletedUids : [course.videoUid]);
         setLibrary((current) => ({
           ...current,
-          videos: current.videos.filter((video) => video.videoUid !== course.videoUid),
+          videos: current.videos.filter((video) => !deletedUids.has(video.videoUid)),
           refreshedAt: new Date().toISOString(),
         }));
-        window.setTimeout(() => void refreshLibrary(), 1500);
       } else {
         throw new Error("This built-in module cannot be deleted.");
       }

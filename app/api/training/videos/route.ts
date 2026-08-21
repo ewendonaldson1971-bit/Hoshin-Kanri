@@ -57,6 +57,16 @@ function textMeta(meta: Record<string, unknown> | undefined, key: string) {
   return typeof value === "string" ? value.trim() : "";
 }
 
+function videoTitle(video: CloudflareVideo) {
+  return textMeta(video.meta, "name") ||
+    video.publicDetails?.title?.trim() ||
+    `Training video ${video.uid?.slice(0, 6)}`;
+}
+
+function normalisedVideoTitle(video: CloudflareVideo) {
+  return videoTitle(video).trim().toLowerCase();
+}
+
 function configuredOrigins() {
   const values = process.env.CLOUDFLARE_STREAM_ALLOWED_ORIGINS
     ?.split(",")
@@ -192,10 +202,7 @@ export async function GET(request: Request) {
         return {
           id: video.uid,
           videoUid: video.uid,
-          title:
-            textMeta(video.meta, "name") ||
-            video.publicDetails?.title?.trim() ||
-            fallbackName,
+          title: videoTitle(video) || fallbackName,
           description:
             textMeta(video.meta, "description") ||
             "Cloudflare Stream training video.",
@@ -306,31 +313,58 @@ export async function DELETE(request: Request) {
   }
 
   try {
-    const response = await fetch(
-      `https://api.cloudflare.com/client/v4/accounts/${encodeURIComponent(env.accountId)}/stream/${encodeURIComponent(uid)}`,
+    // The library intentionally groups duplicate uploads by title. Delete the
+    // complete represented group so removing one card cannot reveal another
+    // hidden copy with a different Cloudflare UID on the next refresh.
+    const listResponse = await fetch(
+      `https://api.cloudflare.com/client/v4/accounts/${encodeURIComponent(env.accountId)}/stream?limit=1000&type=vod`,
       {
-        method: "DELETE",
+        cache: "no-store",
         headers: {
           Authorization: `Bearer ${env.apiToken}`,
           "Content-Type": "application/json",
         },
       },
     );
-    const payload = (await response.json().catch(() => ({}))) as {
-      success?: boolean;
-      errors?: Array<{ message?: string }>;
-    };
-    // Cloudflare's Stream delete endpoint returns no response body on success.
-    // Only an HTTP failure or an explicit `success: false` is an error.
-    if (!response.ok || payload.success === false) {
-      throw new Error(
-        payload.errors?.[0]?.message ||
-          `Cloudflare Stream could not delete the video (${response.status}).`,
+    const listPayload = (await listResponse.json().catch(() => ({}))) as CloudflareResponse;
+    const listedVideos = listResponse.ok && listPayload.success ? listPayload.result ?? [] : [];
+    const targetVideo = listedVideos.find((video) => video.uid === uid);
+    const targetTitle = targetVideo ? normalisedVideoTitle(targetVideo) : "";
+    const deletedUids = Array.from(new Set([
+      uid,
+      ...listedVideos
+        .filter((video) => video.uid && targetTitle && normalisedVideoTitle(video) === targetTitle)
+        .map((video) => video.uid as string),
+    ]));
+
+    await Promise.all(deletedUids.map(async (videoUid) => {
+      const response = await fetch(
+        `https://api.cloudflare.com/client/v4/accounts/${encodeURIComponent(env.accountId)}/stream/${encodeURIComponent(videoUid)}`,
+        {
+          method: "DELETE",
+          headers: {
+            Authorization: `Bearer ${env.apiToken}`,
+            "Content-Type": "application/json",
+          },
+        },
       );
-    }
+      const payload = (await response.json().catch(() => ({}))) as {
+        success?: boolean;
+        errors?: Array<{ message?: string }>;
+      };
+      // Cloudflare's Stream delete endpoint returns no response body on success.
+      // Only an HTTP failure or an explicit `success: false` is an error.
+      const alreadyAbsent = response.status === 404;
+      if ((!response.ok && !alreadyAbsent) || (!alreadyAbsent && payload.success === false)) {
+        throw new Error(
+          payload.errors?.[0]?.message ||
+            `Cloudflare Stream could not delete the video (${response.status}).`,
+        );
+      }
+    }));
 
     return NextResponse.json(
-      { deleted: true, uid, deletedBy: username },
+      { deleted: true, uid, deletedUids, deletedBy: username },
       { headers: { "Cache-Control": "no-store" } },
     );
   } catch (error) {

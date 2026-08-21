@@ -178,12 +178,19 @@ test("includes the Cloudflare Stream training academy", async () => {
   assert.match(route, /\^\[a-f0-9\]\{32\}\$/i);
   assert.match(route, /method: "DELETE"/);
   assert.match(route, /export async function DELETE[\s\S]*payload\.success === false/);
+  assert.match(route, /normalisedVideoTitle/);
+  assert.match(route, /deletedUids = Array\.from\(new Set/);
+  assert.match(route, /normalisedVideoTitle\(video\) === targetTitle/);
+  assert.match(route, /Promise\.all\(deletedUids\.map/);
+  assert.match(route, /alreadyAbsent = response\.status === 404/);
+  assert.match(route, /\{ deleted: true, uid, deletedUids, deletedBy: username \}/);
   assert.match(page, /videos: current\.videos\.filter/);
+  assert.match(page, /!deletedUids\.has\(video\.videoUid\)/);
   assert.ok(
     page.indexOf("if (!response.ok)") < page.indexOf("videos: current.videos.filter"),
     "the UI must not remove a card until deletion succeeds",
   );
-  assert.match(page, /window\.setTimeout\(\(\) => void refreshLibrary\(\), 1500\)/);
+  assert.doesNotMatch(page, /window\.setTimeout\(\(\) => void refreshLibrary\(\), 1500\)/);
   assert.match(route, /deletedBy: username/);
   assert.doesNotMatch(route, /NextResponse\.json\([^)]*apiToken/);
   assert.match(envExample, /CLOUDFLARE_STREAM_API_TOKEN=/);
