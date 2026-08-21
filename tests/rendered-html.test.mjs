@@ -426,6 +426,7 @@ test("mobile workspace drawer covers routes, state and accessible closing behavi
   assert.match(problemSolve, /CONTINUOUS IMPROVEMENT/);
   assert.match(problemSolve, /Problem-solving tools and workflows will be added here\./);
   assert.match(quality, /<Link href="\/lets-problem-solve">Let’s Problem Solve/);
+  assert.match(qualitySidebar, /^"use client";/);
   assert.ok(qualitySidebar.indexOf("Event log") < qualitySidebar.indexOf("problemSolveItem.label"));
   assert.match(qualitySidebar, /aria-current=\{!onQualityPage \? "page"/);
   assert.match(strategy, /view === "Initiatives" \? "initiatives"/);
