@@ -79,8 +79,9 @@ test("landing dashboard uses live metrics and accessible workspace destinations"
 });
 
 test("includes the live Non-Conformance Event workspace", async () => {
-  const [page, route, css] = await Promise.all([
+  const [page, sidebar, route, css] = await Promise.all([
     readFile(new URL("../app/quality/page.tsx", import.meta.url), "utf8"),
+    readFile(new URL("../app/components/quality-workspace-sidebar.tsx", import.meta.url), "utf8"),
     readFile(new URL("../app/api/non-conformance/route.ts", import.meta.url), "utf8"),
     readFile(new URL("../app/globals.css", import.meta.url), "utf8"),
   ]);
@@ -88,7 +89,8 @@ test("includes the live Non-Conformance Event workspace", async () => {
   assert.match(page, /Non-Conformance Events/);
   assert.match(page, /Monthly trend/);
   assert.match(page, /All departments/);
-  assert.match(page, /Open Google Sheet/);
+  assert.match(page, /Let’s Problem Solve/);
+  assert.match(sidebar, /Open source log/);
   assert.match(page, /Training added this week/);
   assert.match(page, /\/api\/training\/videos/);
   assert.match(page, /vivad-youtube-training-links/);
@@ -284,10 +286,10 @@ test("training videos support department libraries, durable completion records a
 });
 
 test("includes the interactive VivaDocs controlled-document workspace", async () => {
-  const [page, strategy, quality, training, css, store, imageRoute, migration, uploadRoute] = await Promise.all([
+  const [page, strategy, qualitySidebar, training, css, store, imageRoute, migration, uploadRoute] = await Promise.all([
     readFile(new URL("../app/vivadocs/page.tsx", import.meta.url), "utf8"),
     readFile(new URL("../app/strategy/page.tsx", import.meta.url), "utf8"),
-    readFile(new URL("../app/quality/page.tsx", import.meta.url), "utf8"),
+    readFile(new URL("../app/components/quality-workspace-sidebar.tsx", import.meta.url), "utf8"),
     readFile(new URL("../app/training/page.tsx", import.meta.url), "utf8"),
     readFile(new URL("../app/globals.css", import.meta.url), "utf8"),
     readFile(new URL("../lib/vivadocs-store.ts", import.meta.url), "utf8"),
@@ -322,7 +324,7 @@ test("includes the interactive VivaDocs controlled-document workspace", async ()
     /async function completeRun\(\)[\s\S]*action: "completeSop"[\s\S]*skills matrix updated[\s\S]*setView\("SOP library"\);/,
   );
   assert.match(strategy, /href="\/vivadocs"/);
-  assert.match(quality, /navigationItem\("vivadocs"\)\.href/);
+  assert.match(qualitySidebar, /navigationItem\("vivadocs"\)\.href/);
   assert.match(training, /navigationItem\("vivadocs"\)\.href/);
   assert.match(css, /\.vivadocs-shell/);
   assert.match(css, /\.operator-player/);
@@ -387,17 +389,19 @@ test("VivaDocs skills matrix is department-scoped, editable and updated by SOP c
 });
 
 test("mobile workspace drawer covers routes, state and accessible closing behaviour", async () => {
-  const [navigation, home, strategy, quality, training, vivadocs, css] = await Promise.all([
+  const [navigation, qualitySidebar, home, strategy, quality, problemSolve, training, vivadocs, css] = await Promise.all([
     readFile(new URL("../app/components/workspace-navigation.tsx", import.meta.url), "utf8"),
+    readFile(new URL("../app/components/quality-workspace-sidebar.tsx", import.meta.url), "utf8"),
     readFile(new URL("../app/page.tsx", import.meta.url), "utf8"),
     readFile(new URL("../app/strategy/page.tsx", import.meta.url), "utf8"),
     readFile(new URL("../app/quality/page.tsx", import.meta.url), "utf8"),
+    readFile(new URL("../app/lets-problem-solve/page.tsx", import.meta.url), "utf8"),
     readFile(new URL("../app/training/page.tsx", import.meta.url), "utf8"),
     readFile(new URL("../app/vivadocs/page.tsx", import.meta.url), "utf8"),
     readFile(new URL("../app/globals.css", import.meta.url), "utf8"),
   ]);
 
-  for (const label of ["Strategy", "Quality events", "Training academy", "Scorecards", "Initiatives", "Reviews", "VivaDocs", "People", "Settings"]) {
+  for (const label of ["Strategy", "Quality events", "Let’s Problem Solve", "Training academy", "Scorecards", "Initiatives", "Reviews", "VivaDocs", "People", "Settings"]) {
     assert.match(navigation, new RegExp(`label: "${label}"`));
   }
   assert.match(navigation, /aria-expanded=\{open\}/);
@@ -416,7 +420,14 @@ test("mobile workspace drawer covers routes, state and accessible closing behavi
   assert.match(css, /overflow-y: auto/);
   assert.match(css, /@media \(max-width: 700px\)/);
   assert.match(css, /:focus-visible/);
-  for (const page of [home, strategy, quality, training, vivadocs]) assert.match(page, /MobileWorkspaceNavigation/);
+  for (const page of [home, strategy, quality, problemSolve, training, vivadocs]) assert.match(page, /MobileWorkspaceNavigation/);
+  assert.match(navigation, /href: "\/lets-problem-solve"/);
+  assert.match(problemSolve, /activeItem="lets-problem-solve"/);
+  assert.match(problemSolve, /CONTINUOUS IMPROVEMENT/);
+  assert.match(problemSolve, /Problem-solving tools and workflows will be added here\./);
+  assert.match(quality, /<Link href="\/lets-problem-solve">Let’s Problem Solve/);
+  assert.ok(qualitySidebar.indexOf("Event log") < qualitySidebar.indexOf("problemSolveItem.label"));
+  assert.match(qualitySidebar, /aria-current=\{!onQualityPage \? "page"/);
   assert.match(strategy, /view === "Initiatives" \? "initiatives"/);
   assert.match(strategy, /view === "Reviews" \? "reviews"/);
 });

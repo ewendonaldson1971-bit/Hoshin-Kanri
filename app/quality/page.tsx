@@ -2,7 +2,8 @@
 
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { MobileWorkspaceNavigation, navigationItem } from "../components/workspace-navigation";
+import { MobileWorkspaceNavigation } from "../components/workspace-navigation";
+import { QUALITY_SHEET_LINK, QualityWorkspaceSidebar } from "../components/quality-workspace-sidebar";
 
 type QualityEvent = {
   id: string;
@@ -47,8 +48,6 @@ type TrainingResponse = {
   error?: string;
 };
 
-const SHEET_LINK =
-  "https://docs.google.com/spreadsheets/d/1aKVB1RjaQSoEW9yw14YJ2asSrsSwDDR3EB2KnSfPRMc/edit?gid=407617143#gid=407617143";
 const YOUTUBE_TRAINING_KEY = "vivad-youtube-training-links";
 
 function isComplete(status: string) {
@@ -292,26 +291,7 @@ export default function QualityPage() {
 
   return (
     <div className="quality-shell">
-      <aside className="quality-sidebar">
-        <Link className="quality-brand" href="/" aria-label="Vivad SPARK home">
-          <img src="/vivad-logo.png" alt="Vivad SPARK — Hoshin, Continuous Improvement" />
-        </Link>
-        <nav aria-label="Vivad workspace">
-          <span className="quality-nav-label">Workspace</span>
-          <Link href={navigationItem("strategy").href}><i>{navigationItem("strategy").icon}</i> {navigationItem("strategy").label}</Link>
-          <Link className="active" href={navigationItem("quality").href}><i>{navigationItem("quality").icon}</i> {navigationItem("quality").label}</Link>
-          <Link href={navigationItem("training").href}><i>{navigationItem("training").icon}</i> {navigationItem("training").label}</Link>
-          <Link href={navigationItem("vivadocs").href}><i>{navigationItem("vivadocs").icon}</i> {navigationItem("vivadocs").label}</Link>
-          <a href="#trends"><i>↗</i> Trends</a>
-          <a href="#event-log"><i>☷</i> Event log</a>
-        </nav>
-        <div className="quality-sidebar-note">
-          <span>LIVE SOURCE</span>
-          <strong>Google Sheets</strong>
-          <small>Read-only connection</small>
-          <a href={SHEET_LINK} target="_blank" rel="noreferrer">Open source log ↗</a>
-        </div>
-      </aside>
+      <QualityWorkspaceSidebar activeItem="quality" />
 
       <main className="quality-main">
         <header className="quality-topbar">
@@ -428,7 +408,7 @@ export default function QualityPage() {
               <h2>Event log</h2>
               <p>{filteredEvents.length} of {data.events.length} records shown</p>
             </div>
-            <a href={SHEET_LINK} target="_blank" rel="noreferrer">Open Google Sheet <span>↗</span></a>
+            <Link href="/lets-problem-solve">Let’s Problem Solve <span>→</span></Link>
           </div>
 
           <div className="quality-filters">
@@ -547,7 +527,7 @@ export default function QualityPage() {
             <section><span>EVENT DESCRIPTION</span><p>{selected.description}</p></section>
             <section><span>ROOT CAUSE</span><p>{selected.rootCause || "Not yet recorded."}</p></section>
             <section><span>REMEDIAL ACTION</span><p>{selected.action || "No remedial action recorded yet."}</p></section>
-            <a className="drawer-source" href={SHEET_LINK} target="_blank" rel="noreferrer">Continue in Google Sheet <span>↗</span></a>
+            <a className="drawer-source" href={QUALITY_SHEET_LINK} target="_blank" rel="noreferrer">Continue in Google Sheet <span>↗</span></a>
           </aside>
         </div>
       )}

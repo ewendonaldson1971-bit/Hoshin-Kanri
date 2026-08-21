@@ -1065,6 +1065,43 @@ select:focus, input:focus { border-color: var(--blue); box-shadow: 0 0 0 3px rgb
   font-weight: 700;
   text-decoration: none;
 }
+.quality-log-heading > a:hover { background: var(--blue); color: #fff; }
+.quality-log-heading > a:focus-visible { outline: 3px solid rgba(71,143,225,.35); outline-offset: 2px; }
+
+.problem-solve-main { display: flex; flex-direction: column; }
+.problem-solve-topbar { justify-content: flex-start; }
+.problem-solve-heading p {
+  max-width: 710px;
+  margin: 9px 0 0;
+  color: #777b82;
+  font-size: 12px;
+  line-height: 1.5;
+}
+.problem-solve-placeholder {
+  min-height: 280px;
+  display: grid;
+  place-items: center;
+  align-content: center;
+  gap: 16px;
+  padding: 36px;
+  border: 1px solid var(--line);
+  border-radius: 9px;
+  background: #fff;
+  color: #747980;
+  text-align: center;
+  box-shadow: 0 9px 24px rgba(38,45,52,.04);
+}
+.problem-solve-placeholder > span {
+  width: 52px;
+  height: 52px;
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  background: var(--soft-blue);
+  color: var(--blue);
+  font-size: 25px;
+}
+.problem-solve-placeholder h2 { max-width: 520px; margin: 0; font-size: 18px; font-weight: 600; line-height: 1.45; }
 .quality-filters { display: flex; align-items: center; gap: 8px; padding: 13px 16px; border-bottom: 1px solid var(--line); background: #fafbfc; }
 .quality-search {
   min-height: 36px;
@@ -1266,6 +1303,7 @@ select:focus, input:focus { border-color: var(--blue); box-shadow: 0 0 0 3px rgb
   .status-multiselect { flex: 1 1 calc(50% - 8px); }
   .status-multiselect-menu { width: 100%; min-width: 210px; }
   .quality-drawer { padding: 20px; }
+  .problem-solve-placeholder { min-height: 220px; padding: 26px 20px; }
 }
 
 /* Cloudflare Stream Training Academy */

@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
 
-export type WorkspaceNavigationId = "strategy" | "quality" | "training" | "scorecards" | "initiatives" | "reviews" | "vivadocs" | "people" | "settings";
+export type WorkspaceNavigationId = "strategy" | "quality" | "lets-problem-solve" | "training" | "scorecards" | "initiatives" | "reviews" | "vivadocs" | "people" | "settings";
 
 export type WorkspaceNavigationItem = {
   id: WorkspaceNavigationId;
@@ -17,6 +17,7 @@ export type WorkspaceNavigationItem = {
 export const workspaceNavigationItems: WorkspaceNavigationItem[] = [
   { id: "strategy", label: "Strategy", icon: "◫", href: "/strategy", group: "Workspace" },
   { id: "quality", label: "Quality events", icon: "◇", href: "/quality", group: "Workspace" },
+  { id: "lets-problem-solve", label: "Let’s Problem Solve", icon: "◎", href: "/lets-problem-solve", group: "Workspace" },
   { id: "training", label: "Training academy", icon: "▷", href: "/training", group: "Workspace" },
   { id: "scorecards", label: "Scorecards", icon: "◎", href: "/strategy?view=Scorecards", group: "Workspace" },
   { id: "initiatives", label: "Initiatives", icon: "↗", href: "/strategy?view=Initiatives", group: "Workspace", count: "4" },
