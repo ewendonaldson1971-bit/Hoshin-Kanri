@@ -1,7 +1,6 @@
 "use client";
 
 import Link from "next/link";
-import Hls from "hls.js";
 import { ChangeEvent, DragEvent, FormEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { MobileWorkspaceNavigation, navigationItem } from "../components/workspace-navigation";
 import { buildPersonSkillsPdf } from "./person-skills-pdf";
@@ -104,39 +103,96 @@ class TrainingDeleteError extends Error {
   }
 }
 
+type CloudflarePlayer = {
+  addEventListener: (event: string, listener: () => void) => void;
+  removeEventListener?: (event: string, listener: () => void) => void;
+};
+
+declare global {
+  interface Window {
+    Stream?: (iframe: HTMLIFrameElement) => CloudflarePlayer;
+  }
+}
+
+function cloudflarePlayerUrl(hlsUrl: string) {
+  try {
+    const url = new URL(hlsUrl);
+    const manifestIndex = url.pathname.indexOf("/manifest/");
+    if (manifestIndex < 0) return "";
+    url.pathname = `${url.pathname.slice(0, manifestIndex)}/iframe`;
+    url.search = "";
+    url.searchParams.set("preload", "auto");
+    return url.toString();
+  } catch {
+    return "";
+  }
+}
+
 function CloudflareStreamVideo({ src, title, onEnded }: { src: string; title: string; onEnded: () => void }) {
-  const videoRef = useRef<HTMLVideoElement>(null);
+  const iframeRef = useRef<HTMLIFrameElement>(null);
+  const onEndedRef = useRef(onEnded);
   const [error, setError] = useState("");
+  const playerUrl = useMemo(() => cloudflarePlayerUrl(src), [src]);
 
   useEffect(() => {
-    const video = videoRef.current;
-    if (!video) return;
+    onEndedRef.current = onEnded;
+  }, [onEnded]);
 
-    if (video.canPlayType("application/vnd.apple.mpegurl")) {
-      video.src = src;
-      return () => {
-        video.removeAttribute("src");
-        video.load();
-      };
+  useEffect(() => {
+    const iframe = iframeRef.current;
+    if (!iframe || !playerUrl) return;
+
+    let player: CloudflarePlayer | undefined;
+    let disposed = false;
+    const handlePlaying = () => setError("");
+    const handleEnded = () => onEndedRef.current();
+    const handleError = () => setError("Cloudflare could not continue playback. Please try again or choose another connection.");
+    const attachPlayer = () => {
+      if (disposed || !iframeRef.current || !window.Stream) return;
+      player = window.Stream(iframeRef.current);
+      player.addEventListener("playing", handlePlaying);
+      player.addEventListener("ended", handleEnded);
+      player.addEventListener("error", handleError);
+    };
+
+    const existingScript = document.querySelector<HTMLScriptElement>('script[data-cloudflare-stream-sdk="true"]');
+    if (window.Stream) {
+      attachPlayer();
+    } else if (existingScript) {
+      existingScript.addEventListener("load", attachPlayer, { once: true });
+    } else {
+      const script = document.createElement("script");
+      script.src = "https://embed.cloudflarestream.com/embed/sdk.latest.js";
+      script.async = true;
+      script.dataset.cloudflareStreamSdk = "true";
+      script.addEventListener("load", attachPlayer, { once: true });
+      script.addEventListener("error", handleError, { once: true });
+      document.head.appendChild(script);
     }
 
-    if (!Hls.isSupported()) {
-      video.dispatchEvent(new Event("error"));
-      return;
-    }
-
-    const hls = new Hls({ enableWorker: true });
-    hls.loadSource(src);
-    hls.attachMedia(video);
-    hls.on(Hls.Events.ERROR, (_event, data) => {
-      if (data.fatal) setError("The video stream could not be loaded. Please try again.");
-    });
-    return () => hls.destroy();
-  }, [src]);
+    return () => {
+      disposed = true;
+      existingScript?.removeEventListener("load", attachPlayer);
+      player?.removeEventListener?.("playing", handlePlaying);
+      player?.removeEventListener?.("ended", handleEnded);
+      player?.removeEventListener?.("error", handleError);
+    };
+  }, [playerUrl]);
 
   return (
     <div className="training-stream-video">
-      <video ref={videoRef} controls playsInline preload="metadata" aria-label={title} onEnded={onEnded} onError={() => setError("The video stream could not be loaded. Please try again.")} />
+      {playerUrl ? (
+        <iframe
+          ref={iframeRef}
+          src={playerUrl}
+          title={title}
+          allow="accelerometer; gyroscope; autoplay; encrypted-media; picture-in-picture"
+          referrerPolicy="strict-origin-when-cross-origin"
+          allowFullScreen
+        />
+      ) : (
+        <p role="alert">The video does not have a valid Cloudflare player address.</p>
+      )}
       {error && <p role="alert">{error}</p>}
     </div>
   );
@@ -1048,7 +1104,7 @@ export default function TrainingPage() {
               />
             ) : isConnected ? (
               <CloudflareStreamVideo
-                key={`${activeCourse.playbackUrl}-${activeUid}-${library.refreshedAt ?? "initial"}`}
+                key={`${activeCourse.playbackUrl}-${activeUid}`}
                 src={activeCourse.playbackUrl as string}
                 title={activeCourse.title}
                 onEnded={() => {

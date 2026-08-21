@@ -112,11 +112,14 @@ test("includes the Cloudflare Stream training academy", async () => {
 
   assert.match(page, /Training Academy/);
   assert.match(page, /signed URLs/);
-  assert.match(page, /import Hls from "hls\.js"/);
-  assert.match(page, /new Hls\(\{ enableWorker: true \}\)/);
+  assert.doesNotMatch(page, /import Hls from "hls\.js"/);
+  assert.match(page, /embed\.cloudflarestream\.com\/embed\/sdk\.latest\.js/);
+  assert.match(page, /url\.pathname = `\$\{url\.pathname\.slice\(0, manifestIndex\)\}\/iframe`/);
+  assert.match(page, /url\.searchParams\.set\("preload", "auto"\)/);
+  assert.match(page, /player\.addEventListener\("playing"/);
+  assert.match(page, /player\.addEventListener\("ended", handleEnded\)/);
+  assert.match(page, /player\.addEventListener\("error"/);
   assert.match(page, /src=\{activeCourse\.playbackUrl as string\}/);
-  assert.match(page, /onEnded=\{onEnded\}/);
-  assert.doesNotMatch(page, /embed\.cloudflarestream\.com\/embed\/sdk/);
   assert.match(page, /\/api\/training\/videos/);
   assert.match(route, /api\.cloudflare\.com\/client\/v4\/accounts/);
   assert.match(route, /Authorization: `Bearer \$\{env\.apiToken\}`/);
@@ -134,7 +137,8 @@ test("includes the Cloudflare Stream training academy", async () => {
   assert.match(route, /deliveryError/);
   assert.match(route, /allowedOrigins/);
   assert.match(route, /vivadspark\.netlify\.app/);
-  assert.match(page, /library\.refreshedAt \?\? "initial"/);
+  assert.match(page, /key=\{`\$\{activeCourse\.playbackUrl\}-\$\{activeUid\}`\}/);
+  assert.doesNotMatch(page, /key=\{[^\n]*library\.refreshedAt/);
   assert.match(page, /Cloudflare could not deliver this video/);
   assert.match(page, /Try playback again/);
   assert.match(page, /window\.setTimeout\(\(\) => void refreshLibrary\(\), 8_000\)/);
@@ -190,7 +194,7 @@ test("includes the Cloudflare Stream training academy", async () => {
   assert.match(page, /PLAYBACK ERROR/);
   assert.match(page, /course\.ready === true && !course\.deliveryError/);
   assert.match(css, /\.training-player iframe/);
-  assert.match(css, /\.training-stream-video video/);
+  assert.match(css, /\.training-stream-video iframe/);
   assert.match(css, /\.stream-modal/);
   assert.match(css, /\.training-delete-video/);
   assert.match(css, /\.training-delete-notice/);
